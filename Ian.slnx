@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Ian.Api/Ian.Api.csproj" />
+  <Project Path="Ian.Application/Ian.Application.csproj" />
+  <Project Path="Ian.Domain/Ian.Domain.csproj" />
+  <Project Path="Ian.Infrastructure/Ian.Infrastructure.csproj" />
+  <Project Path="Ian.Tests/Ian.Tests.csproj" />
+</Solution>
