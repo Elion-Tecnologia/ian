@@ -58,15 +58,22 @@ dotnet test
 
 Executa os testes automatizados disponíveis na solução.
 
-### 4. Iniciar a API
+### 4. Configurar o Telegram e iniciar a API
+
+Em `Development`, use o User Secrets da API. Os valores abaixo são fictícios e permitem testar a inicialização e o endpoint de saúde localmente.
 
 ```bash
+dotnet user-secrets set "Telegram:BotToken" "token-ficticio" --project Ian.Api
+dotnet user-secrets set "Telegram:AdministratorUserId" "42" --project Ian.Api
+dotnet user-secrets set "Telegram:WebhookSecret" "segredo_ficticio-123" --project Ian.Api
 dotnet run --project Ian.Api
 ```
 
-Inicia a aplicação ASP.NET Core. Os endereços HTTP/HTTPS disponíveis serão exibidos no terminal.
+O token deve ser preenchido, o ID deve ser um inteiro positivo de 64 bits e o segredo deve ter de 1 a 256 caracteres ASCII entre letras, dígitos, `_` e `-`. `Telegram:PublicBaseUrl` é opcional e, se definida, deve ser uma URL HTTPS absoluta, como `https://ian.example.test`. Uma configuração inválida impede a inicialização e indica a chave a corrigir.
 
-> A configuração do Telegram, Gemini, PostgreSQL e do túnel HTTPS será documentada conforme as respectivas integrações forem implementadas.
+Da menor para a maior prioridade, a configuração da aplicação vem de `appsettings.json`, `appsettings.<Ambiente>.json`, User Secrets (em `Development`), variáveis de ambiente e argumentos de linha de comando. Para configurar por ambiente, use `Telegram__BotToken`, `Telegram__AdministratorUserId`, `Telegram__WebhookSecret` e, se necessário, `Telegram__PublicBaseUrl`. Mantenha credenciais reais fora do Git e use User Secrets no ambiente local ou variáveis de ambiente fornecidas pelo ambiente de execução.
+
+Os endereços HTTP/HTTPS disponíveis aparecem no terminal. O console registra status, duração e `TraceId` W3C das requisições em JSON.
 
 ## Organização do desenvolvimento
 

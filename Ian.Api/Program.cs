@@ -1,19 +1,17 @@
-var builder = WebApplication.CreateBuilder(args);
+using System.Diagnostics;
+using Ian.Api;
 
-builder.Services.AddOpenApi();
+Activity.DefaultIdFormat = ActivityIdFormat.W3C;
+Activity.ForceDefaultIdFormat = true;
 
-var app = builder.Build();
-if (app.Environment.IsDevelopment())
+// Keep request activities when the hosting logger is disabled to omit raw request paths.
+using var requestActivities = new ActivityListener
 {
-    app.MapOpenApi();
-}
+    ShouldListenTo = source => source.Name == "Microsoft.AspNetCore",
+    Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.PropagationData,
+    SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.PropagationData
+};
+ActivitySource.AddActivityListener(requestActivities);
 
-app.UseHttpsRedirection();
-
-app.MapGet("/app/v1/health", () =>
-{
-    Console.WriteLine("Health checado. Endpoint acionado.");
-    return Results.Ok(new { status = "Healthy" });
-});
-
+var app = ApiHost.Build(WebApplication.CreateBuilder(args));
 app.Run();
