@@ -356,6 +356,35 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Ian.Domain.Entities.TelegramUpdateInbox", b =>
+                {
+                    b.Property<long>("UpdateId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("RecebidoEmUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UpdateId");
+
+                    b.HasIndex("Estado", "RecebidoEmUtc");
+
+                    b.ToTable("telegram_updates_inbox", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_telegram_inbox_estado", "\"Estado\" IN ('Received')");
+
+                            t.HasCheckConstraint("ck_telegram_inbox_update_id", "\"UpdateId\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Ian.Domain.Entities.TipoServico", b =>
                 {
                     b.Property<long>("Id")

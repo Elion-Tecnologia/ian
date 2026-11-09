@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Ian.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Ian.Application.Telegram;
 
 namespace Ian.Infrastructure;
 
@@ -30,6 +31,8 @@ public static class DependencyInjection
             options.UseNpgsql(ReadPostgresConnectionString(configuration));
             options.EnableSensitiveDataLogging(false);
         });
+
+        services.AddScoped<ITelegramUpdateInboxWriter,TelegramUpdateInboxWriter>();
 
         return services;
     }
