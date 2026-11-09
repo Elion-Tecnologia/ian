@@ -44,7 +44,7 @@ jobs:
 
       - name: Upload test report
         if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ian-test-results
           path: ${{ runner.temp }}/ian-test-results/*.trx
