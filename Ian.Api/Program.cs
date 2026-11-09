@@ -15,3 +15,5 @@ ActivitySource.AddActivityListener(requestActivities);
 
 var app = ApiHost.Build(WebApplication.CreateBuilder(args));
 app.Run();
+
+public partial class Program { }

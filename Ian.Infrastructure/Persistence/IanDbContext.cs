@@ -16,6 +16,7 @@ public sealed class IanDbContext(DbContextOptions<IanDbContext> options)
     public DbSet<SolicitacaoPendente> SolicitacoesPendentes => Set<SolicitacaoPendente>();
     public DbSet<RegistroAuditoria> RegistrosAuditoria => Set<RegistroAuditoria>();
     public DbSet<EnvioTelegram> EnviosTelegram => Set<EnvioTelegram>();
+    public DbSet<TelegramUpdateInbox> TelegramUpdatesInbox => Set<TelegramUpdateInbox>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

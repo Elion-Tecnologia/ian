@@ -1,5 +1,6 @@
 using Ian.Infrastructure;
 using Microsoft.AspNetCore.HttpLogging;
+using Ian.Api.Endpoints;
 
 namespace Ian.Api;
 
@@ -17,12 +18,25 @@ public static class ApiHost
 
         builder.Logging.ClearProviders();
         builder.Logging.Configure(options => options.ActivityTrackingOptions = ActivityTrackingOptions.TraceId);
-        builder.Logging.AddJsonConsole(options =>
+
+        if (builder.Environment.IsDevelopment())
         {
-            options.IncludeScopes = true;
-            options.UseUtcTimestamp = true;
-            options.TimestampFormat = "O";
-        });
+            builder.Logging.AddSimpleConsole(options =>
+            {
+                options.SingleLine = true;
+                options.TimestampFormat = "HH:mm:ss ";
+                options.IncludeScopes = true;
+            });
+        }
+        else
+        {
+            builder.Logging.AddJsonConsole(options =>
+            {
+                options.IncludeScopes = true;
+                options.UseUtcTimestamp = true;
+                options.TimestampFormat = "O";
+            });
+        }
 
         var app = builder.Build();
         if (app.Environment.IsDevelopment())
@@ -34,6 +48,7 @@ public static class ApiHost
         app.UseHttpsRedirection();
 
         app.MapGet("/app/v1/health", () => Results.Ok(new { status = "Healthy" }));
+        app.MapTelegramWebhook();
 
         return app;
     }
