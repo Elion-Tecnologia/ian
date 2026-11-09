@@ -3,6 +3,9 @@ using Ian.Infrastructure.Telegram;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Ian.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Ian.Infrastructure;
 
@@ -22,7 +25,44 @@ public static class DependencyInjection
                 "Telegram:WebhookSecret deve conter de 1 a 256 caracteres entre A-Z, a-z, 0-9, _ e -.")
             .ValidateOnStart();
 
+        services.AddDbContext<IanDbContext>(options =>
+        {
+            options.UseNpgsql(ReadPostgresConnectionString(configuration));
+            options.EnableSensitiveDataLogging(false);
+        });
+
         return services;
+    }
+    private static string ReadPostgresConnectionString(IConfiguration configuration)
+    {
+        const string key = "ConnectionStrings:Default";
+        var value = configuration.GetConnectionString("Default");
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException($"{key} deve ser configurada para usar o PostgreSQL.");
+        }
+
+        NpgsqlConnectionStringBuilder connection;
+        try
+        {
+            connection = new NpgsqlConnectionStringBuilder(value);
+        }
+        catch (ArgumentException)
+        {
+            throw new InvalidOperationException($"{key} tem formato inválido para o PostgreSQL.");
+        }
+
+        if (string.IsNullOrWhiteSpace(connection.Host))
+        {
+            throw new InvalidOperationException($"{key} deve informar o Host do PostgreSQL.");
+        }
+
+        connection.IncludeErrorDetail = false;
+        connection.LogParameters = false;
+        connection.PersistSecurityInfo = false;
+
+        return connection.ConnectionString;
     }
 
     private static void ReadTelegramOptions(TelegramOptions options, IConfiguration section)
