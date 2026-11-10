@@ -248,7 +248,7 @@ Sem essa variável, os testes de integração são ignorados, não considerados 
 
 O suporte de voz usa `GeminiVoiceTranscriber`, MAF e o SDK oficial da #19,
 com `gemini-3.1-flash-lite`, mas ainda não está ativado no dispatcher da API.
-A integração final aguarda o smoke real de áudio e o handler textual
+A integração final aguarda sucesso no smoke real de áudio e o handler textual
 autorizado, que não foi implementado na #19. `DeferredTelegramHandlers`
 continua preservando os comandos em
 `FailedPaused`; a existência dos componentes abaixo não significa que o bot
@@ -307,8 +307,14 @@ o handler provisório no dispatcher.
 Os cinco smokes de áudio usam a categoria `GeminiVoiceSmoke` e exigem
 autorização específica da #17, `IAN_RUN_VOICE_SMOKE=1`,
 `IAN_ALLOW_GEMINI_QUOTA=1` e fixtures externas exclusivamente sintéticas.
-Não foram executados nesta entrega. O preparador offline e o procedimento
-com estimativa de três chamadas estão em [docs/spikes/voz.md](docs/spikes/voz.md#smoke-de-áudio-preparado--não-executado).
+Na rodada autorizada de 10/11/2026, inválido e silêncio foram rejeitados
+localmente sem chamadas; `short` falhou com `Timeout` após um envio e
+60013 ms. Os dois cenários restantes não foram executados. As flags foram
+removidas, sem retry ou alteração do modelo/timeout. A fala degradada foi
+considerada compreensível pelo usuário e deve preservar a frase ou solicitar
+esclarecimento; não é prova de incompreensibilidade.
+O preparador offline, limites de envio e evidências estão em
+[docs/spikes/voz.md](docs/spikes/voz.md#smoke-de-áudio--preparação-e-execução-parcial).
 
 Para reproduzir os testes novos:
 

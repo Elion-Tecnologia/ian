@@ -12,10 +12,12 @@ Esta continuação implementa `GeminiVoiceTranscriber` na branch
 O handler textual real ainda não existe: `DeferredTelegramHandlers`
 continua instalado. A #17 permanece aberta e sem aceite integral.
 
-Nenhum smoke de áudio real foi executado ou autorizado nesta continuação.
-A autorização anterior da #19 não se aplica. Nenhuma credencial foi
-inspecionada e nenhum áudio foi enviado ao Google. As seções da preparação
-original abaixo são históricas; as evidências atuais estão ao final.
+O usuário autorizou uma rodada de áudio com no máximo três gerações.
+Dois cenários locais passaram e `short` terminou em `Timeout` após um
+envio; a rodada foi interrompida, sem executar `fictional` ou a fala
+degradada. A transcrição real ainda não foi validada com sucesso.
+Nenhuma credencial ou transcrição completa foi exibida. As seções da
+preparação original abaixo são históricas; as evidências atuais estão ao final.
 
 ## Avaliação documental do candidato Gemini
 
@@ -209,9 +211,11 @@ Os [termos do Google](https://ai.google.dev/gemini-api/terms) diferenciam
 uso de conteúdo em serviços gratuitos e pagos, com exceções regionais.
 Mesmo no pago há retenção limitada para segurança/abuso. Não enviar dados
 de clientes nesta validação; confirmar o regime da conta antes de produção.
-Não houve consumo nem cobrança de áudio provocados por esta implementação.
+Na rodada autorizada houve um envio de geração, sem resposta textual antes
+do timeout. Uso de tokens e valor cobrado não foram disponibilizados;
+não é possível concluir se o processamento do provedor terminou ou gerou cobrança.
 
-## Smoke de áudio preparado — não executado
+## Smoke de áudio — preparação e execução parcial
 
 `GeminiVoiceSmokeTests` possui cinco casos manuais usando o transcritor
 de produção via DI. É uma teoria ignorada por padrão, descoberta como um
@@ -219,9 +223,10 @@ de produção via DI. É uma teoria ignorada por padrão, descoberta como um
 
 `scripts/Prepare-VoiceSmoke.ps1` prepara arquivos sintéticos fora do Git,
 com TTS offline pt-BR do Windows e ffmpeg/libopus já instalado. Não chama
-Google nem inicia testes. Sua sintaxe foi validada, mas não foi executado:
-ffmpeg não está disponível neste ambiente. Não instala ferramentas nem
-baixa vozes automaticamente. Use PowerShell no Windows com voz pt-BR offline.
+Google nem inicia testes. Após instalação manual de FFmpeg/ffprobe 9.0.2
+com `libopus`, foi executado com Microsoft Maria Desktop pt-BR (SAPI 416).
+Os arquivos foram gerados em diretório temporário fora do Git. Não instala
+ferramentas nem baixa vozes automaticamente; nenhum WAV intermediário restou.
 
 ```powershell
 ./scripts/Prepare-VoiceSmoke.ps1 -OutputDirectory "$env:TEMP/IanVoiceSmoke"
@@ -231,7 +236,7 @@ baixa vozes automaticamente. Use PowerShell no Windows com voz pt-BR offline.
 | --- | --- | --- |
 | `short.ogg` | TTS: Esta é uma mensagem sintética de teste. | Preservar a frase reconhecível |
 | `silence.ogg` | Dois segundos de zeros codificados em Opus | `EmptyTranscription`, sem envio |
-| `unintelligible.ogg` | TTS acelerado/filtrado, deliberadamente degradado | `NeedsClarification`; validar a degradação no ensaio |
+| `unintelligible.ogg` | TTS acelerado/filtrado, deliberadamente degradado | Após revisão auditiva do usuário: transcrição fiel ou `NeedsClarification` |
 | `fictional.ogg` | Nome fictício Aurora e número 42 | Preservar os identificadores ou pedir esclarecimento |
 | `invalid.ogg` | Bytes ASCII sem contêiner válido | `InvalidFile`, sem envio |
 
@@ -246,7 +251,82 @@ O script não comprova que uma frase ficou incompreensível para o modelo.
 Qualquer resultado inesperado deve ser diagnosticado, sem tentativas extras
 de consumo automaticamente autorizadas.
 
-**Aguardar autorização explícita específica da #17 antes dos comandos abaixo.**
+### Validação offline das fixtures
+
+SHA-256 dos cinco arquivos foi reconferido contra a preparação original
+antes dos smokes; nenhuma fixture foi regenerada ou substituída.
+FFprobe reconheceu quatro arquivos OGG/Opus mono a 48 kHz e FFmpeg os
+decodificou sem erros. Um helper temporário compilou o código existente
+de `OggOpusValidator` com DLLs locais, em restore offline; confirmou
+limites de 5 MiB/120 s e limpeza dos buffers emprestados após descarte.
+
+| Arquivo | Bytes | Duração ffprobe | Efetiva após pre-skip | Validador local |
+| --- | --- | --- | --- | --- |
+| `invalid.ogg` | 23 | Não aplicável | Não aplicável | `InvalidFile` |
+| `silence.ogg` | 620 | 2,006500 s | 2,000000 s | `EmptyTranscription` |
+| `short.ogg` | 32422 | 4,011313 s | 4,004813 s | Válido e audível |
+| `fictional.ogg` | 38638 | 5,028104 s | 5,021604 s | Válido e audível |
+| `unintelligible.ogg` | 9342 | 1,143833 s | 1,137333 s | Válido e audível |
+
+Metadados contêm apenas identificação do encoder; todo conteúdo vem de
+frases sintéticas fixas, inclusive nome/número fictícios. Os arquivos,
+helper e relatórios TRX permanecem fora do repositório.
+
+### Critério da fala degradada
+
+O usuário confirmou em revisão auditiva offline que a frase continua
+compreensível. O teste foi corrigido **antes de qualquer envio desse caso**
+para aceitar transcrição fiel da frase sintética original (ignorando
+pontuação/espaçamento e maiúsculas) ou `NeedsClarification`. Uma resposta
+arbitrária ou com palavras diferentes não passa. Não foi usada uma resposta
+do Gemini para ajustar a expectativa; esse cenário sequer foi enviado.
+O arquivo mantém seu nome para compatibilidade, mas representa fala
+degradada, não um oráculo de incompreensibilidade. Um futuro ensaio negativo
+confiável exige outra fixture revisada e autorização própria de consumo.
+
+### Rodada autorizada em 10/11/2026 — interrompida no timeout
+
+Início às 21:01:55 UTC (18:01:55 em America/Sao_Paulo), modelo fixo
+`gemini-3.1-flash-lite`. Configuração efetiva confirmada pelo runtime:
+5242880 bytes, 120 segundos de áudio e timeout de 60 segundos. Somente
+as cinco fixtures sintéticas previamente confirmadas foram usadas.
+
+| Ordem/cenário | Resultado do smoke | Classificação | Latência da invocação | Gerações despachadas |
+| --- | --- | --- | --- | --- |
+| 1. `invalid` | Aprovado; rejeição local sem texto | `InvalidFile` | 29 ms | 0 |
+| 2. `silence` | Aprovado; rejeição local sem texto | `EmptyTranscription` | 67 ms | 0 |
+| 3. `short` | **Falhou**; sem transcrição antes do deadline | `Timeout` | 60013 ms | 1 |
+| 4. `fictional` | Não executado após a falha | Não avaliado | Não medida | 0 |
+| 5. Fala degradada | Não executado após a falha | Não avaliado | Não medida | 0 |
+
+O processo `short` começou às 21:02:22 UTC. A latência inclui validação
+local e espera pela chamada; não é uma medida isolada do servidor.
+**Total: 1 de até 3 gerações autorizadas**, sem repetição. O teto de três
+não foi atingido nem usado para tentar novamente depois da falha.
+O SDK já tinha retries desabilitados; não foram adicionados retries ou
+troca de modelo. Nenhum texto completo ou credencial foi registrado.
+
+O transporte de teste `GeminiSmokeTransport`, aplicado à fábrica/SDK de
+produção resolvidos por DI, conta requisições no ponto de despacho HTTP.
+Bloqueia todos os envios em `invalid`/`silence` e permite no máximo uma
+geração por caso restante, somente no endpoint HTTPS do modelo autorizado.
+Demais destinos/novas tentativas são bloqueados antes da rede; nesta rodada
+o contador de bloqueios foi zero. Os números são envios HTTP, não uma
+confirmação de faturamento. Não altera transporte ou comportamento de produção.
+Cinco testes locais com HTTP fake verificam limite zero/um e destinos recusados.
+
+Cada cenário executado foi filtrado separadamente e teve seu resultado TRX conferido.
+Os comandos de `fictional` e fala degradada não chegaram a ser executados.
+Todos os opt-ins foram removidos em `finally` e a regressão roda com smokes
+desabilitados. **Nenhuma nova chamada nesta execução.**
+
+Diagnóstico disponível: deadline aplicado e falha tipada sem texto inventado.
+Não há evidência suficiente para atribuir a causa ao modelo, quota,
+autenticação ou conectividade. Não foi aumentado o timeout nem alterado
+o adaptador para contornar a falha. Investigação com novos envios ou
+reexecução depende de diagnóstico e autorização explícita adicional.
+
+**Os comandos abaixo são referência para uma futura rodada, após nova autorização.**
 Depois de preparar e revisar fixtures sintéticas e ter a configuração
 segura da #19, executar em sequência e interromper na primeira falha:
 
@@ -255,7 +335,7 @@ $env:IAN_RUN_VOICE_SMOKE = '1'
 $env:IAN_ALLOW_GEMINI_QUOTA = '1'
 $env:IAN_VOICE_SMOKE_DIRECTORY = "$env:TEMP/IanVoiceSmoke"
 try {
-    foreach ($scenario in @('invalid', 'silence', 'short', 'unintelligible', 'fictional')) {
+    foreach ($scenario in @('invalid', 'silence', 'short', 'fictional', 'unintelligible')) {
         dotnet test Ian.slnx --configuration Release --filter "Category=GeminiVoiceSmoke&DisplayName~$scenario" --logger 'console;verbosity=detailed'
         if ($LASTEXITCODE -ne 0) { throw 'Interromper para diagnóstico; não repetir automaticamente.' }
     }
@@ -264,15 +344,20 @@ try {
 }
 ```
 
-Os testes registram apenas cenário, modelo, latência, classificação e
-presença de texto. O contrato de voz não expõe uso de tokens, portanto
+Os testes registram apenas cenário, modelo, limites, latência, classificação,
+presença de texto e contadores de despacho/bloqueio. O contrato de voz
+não expõe uso de tokens, portanto
 não há contagem de consumo disponível nesse smoke. Não imprime transcrição
-ou paths privados. Falhas reais permanecem sem validação nesta entrega.
+ou paths privados. Timeout foi observado no serviço real; não houve
+transcrição real bem-sucedida, teste real de 429 ou confirmação de precisão.
 
 ## Validação local da continuação
 
 Restore, build Release e testes locais sem Google. Resultado:
-**204 aprovados, 10 ignorados, 0 falhas; total 214**, build sem avisos/erros.
+**209 aprovados, 10 ignorados, 0 falhas; total 219**, build sem avisos/erros.
+Esse resultado é da regressão local, separada da rodada de smokes acima,
+na qual houve dois aprovados e uma falha real que não é contabilizada
+como aprovada nem ocultada pelo resultado da suíte comum.
 Os testes exercitam mono/estéreo, Opus real codificado/decodificado,
 CRC/truncamento/codec inválido/stream encadeado, duração forjada/excedida
 e no limite, silêncio, resposta vazia/incompreensível/incerta, tool inesperada,
@@ -291,13 +376,16 @@ não aprovados**, por ausência de `IAN_TEST_POSTGRES_CONNECTION_STRING`:
 - `ExpiredLeaseIsRecoveredByAnotherConsumer`
 - `RetryRespectsScheduledTime`
 
-Os demais ignorados são os dois smokes textuais da #19, sem autorização
-reutilizada, e a teoria de áudio com cinco cenários da #17, não executada.
+Os demais ignorados são os dois smokes textuais da #19 e a teoria de áudio
+da #17, desabilitados na regressão após remover as flags. Os resultados
+da rodada parcial real estão registrados separadamente, incluindo a falha.
 
 ## Pendências para concluir a #17
 
-1. Preparar/revisar fixtures sintéticas, autorizar quota e executar os cinco
-   casos reais, registrando qualidade, latência e limitações sem conteúdo privado.
+1. Diagnosticar o timeout sem presumir a causa; obter nova autorização antes
+   de repetir `short` ou executar os dois envios restantes. A validação de
+   transcrição real e nomes/números continua pendente. O caso degradado
+   não comprova o comportamento com fala de fato incompreensível.
 2. Entregar o handler textual autorizado e seus gates de esclarecimento,
    confirmação e idempotência. A #19 disponibiliza o modelo, não esse handler.
 3. Após as duas validações, trocar explicitamente a composição do dispatcher

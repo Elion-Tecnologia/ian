@@ -320,8 +320,12 @@ de confiança tratado como prova de precisão.
 O transcritor e o decorator concreto são registrados por DI, mas o
 dispatcher continua usando `DeferredTelegramHandlers`. O decorator
 recebe esse handler explicitamente, evitando ciclos. A ativação aguarda
-smoke de áudio autorizado e a entrega do handler textual real, ausente
-na #19. Nenhuma chamada ao Google ocorre ao resolver os serviços.
+conclusão bem-sucedida do smoke de áudio e a entrega do handler textual
+real, ausente na #19. Nenhuma chamada ao Google ocorre ao resolver os serviços.
+Na rodada real de 10/11/2026, inválido/silêncio foram rejeitados localmente;
+`short` terminou em timeout após um envio e a execução foi interrompida.
+Não houve ativação ou mudança no handler/transporte de produção. O teto
+de envios foi aplicado por instrumentação exclusiva dos testes.
 Os testes com fakes e HTTP local não comprovam transcrição real nem
 a proteção de mutações por ferramentas futuras do agente.
 
