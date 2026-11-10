@@ -795,10 +795,11 @@ Definir limites de tamanho e duração, abordagem de transcrição/interpretaç�
 
 Na preparação da issue #17, foram definidos limites iniciais configuráveis
 de 5 MiB, 120 segundos e timeout de 60 segundos, com download em memória
-e descarte dos buffers. A ativação e a escolha final do provedor continuam
-pendentes do spike real e da integração MAF/Gemini da #19. A duração e o
-formato efetivos deverão ser validados pelo adaptador, além dos metadados
-Telegram. Evidências e pendências: `docs/spikes/voz.md`.
+e descarte dos buffers. Após a #19, `GeminiVoiceTranscriber` usa o modelo
+escolhido `gemini-3.1-flash-lite`, SDK oficial e MAF, validando OGG/Opus
+e duração decodificada localmente. A ativação continua pendente do smoke
+real de áudio e do handler textual autorizado. A precisão não é garantida
+pelo status do LLM. Evidências e pendências: `docs/spikes/voz.md`.
 
 ### PT-03 — Hospedagem permanente
 

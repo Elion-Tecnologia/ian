@@ -244,12 +244,13 @@ Testes de integração PostgreSQL usam exclusivamente um banco descartável e a 
 
 Sem essa variável, os testes de integração são ignorados, não considerados validados.
 
-## Entrada de voz (T09 — preparação para T11)
+## Entrada de voz (T09 — transcritor disponível, fluxo ainda desativado)
 
-O suporte de voz está preparado e testado com fakes e HTTP local, mas ainda não
-está ativado no dispatcher da API. Por decisão de implementação da issue #17,
-a integração final aguarda a #19 (MAF/Gemini) e o spike real do provedor de
-transcrição. `DeferredTelegramHandlers` continua preservando os comandos em
+O suporte de voz usa `GeminiVoiceTranscriber`, MAF e o SDK oficial da #19,
+com `gemini-3.1-flash-lite`, mas ainda não está ativado no dispatcher da API.
+A integração final aguarda o smoke real de áudio e o handler textual
+autorizado, que não foi implementado na #19. `DeferredTelegramHandlers`
+continua preservando os comandos em
 `FailedPaused`; a existência dos componentes abaixo não significa que o bot
 já transcreve áudios em produção.
 
@@ -277,8 +278,11 @@ independente quando utilizado diretamente.
 Tamanho e duração declarados são validados antes do download. O cliente
 verifica o tamanho retornado por `getFile`, `Content-Length` e os bytes
 efetivamente lidos, inclusive em respostas sem tamanho declarado. MIME e
-duração declarados não comprovam o conteúdo: o adaptador de transcrição deverá
-validar formato, duração efetiva e qualidade antes de retornar sucesso.
+duração declarados não comprovam o conteúdo: o adaptador valida o contêiner
+OGG e decodifica Opus com Concentus 2.2.2, medindo duração efetiva e silêncio.
+Aceita um stream completo mono/estéreo, sem encadeamento; o limite inline
+efetivo é o menor entre `MaxBytes` e 12 MiB. O timeout da transcrição usa o
+menor entre `TelegramVoice.TimeoutSeconds` e `Gemini.TimeoutSeconds`.
 
 Não há arquivos temporários em disco. Streams e respostas HTTP são descartados,
 e os buffers de áudio são zerados ao terminar a transcrição, inclusive em
@@ -295,6 +299,16 @@ Cancelamento do host/perda do lease é propagado, sem enviar fallback.
 A aprovação da transcrição não autoriza mutações: ambiguidade semântica,
 confirmações e regras de negócio continuam a cargo do pipeline textual/backend.
 A política desses casos ainda depende das funcionalidades futuras do agente.
+O adaptador rejeita sinais de incerteza e respostas inválidas; não usa um
+score de confiança do LLM nem garante precisão por um status positivo.
+O decorator concreto pode ser resolvido por DI para testes, sem substituir
+o handler provisório no dispatcher.
+
+Os cinco smokes de áudio usam a categoria `GeminiVoiceSmoke` e exigem
+autorização específica da #17, `IAN_RUN_VOICE_SMOKE=1`,
+`IAN_ALLOW_GEMINI_QUOTA=1` e fixtures externas exclusivamente sintéticas.
+Não foram executados nesta entrega. O preparador offline e o procedimento
+com estimativa de três chamadas estão em [docs/spikes/voz.md](docs/spikes/voz.md#smoke-de-áudio-preparado--não-executado).
 
 Para reproduzir os testes novos:
 

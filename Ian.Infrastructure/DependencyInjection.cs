@@ -56,6 +56,12 @@ public static class DependencyInjection
                 "TelegramVoice: limites de tamanho, duração ou timeout inválidos.")
             .ValidateOnStart();
 
+        // Available for isolated validation; the live dispatcher still uses DeferredTelegramHandlers.
+        services.AddSingleton<IVoiceTranscriber>(provider => new GeminiVoiceTranscriber(
+            provider.GetRequiredService<IOptions<GeminiOptions>>(),
+            provider.GetRequiredService<IOptions<TelegramVoiceOptions>>(),
+            provider.GetRequiredService<GeminiChatClientFactory>().GetClient));
+
         services.AddSingleton(provider => new TelegramVoiceFileClient(
             new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
             {
@@ -93,6 +99,16 @@ public static class DependencyInjection
         services.AddScoped<TelegramBusinessOperationExecutor>();
 
         services.AddScoped<DeferredTelegramHandlers>();
+
+        // Explicit resolution is possible in tests; do not install in the live dispatcher
+        // until the authorized text pipeline and real audio validation are delivered.
+        services.AddScoped<TelegramVoiceUpdateHandler>(provider => new TelegramVoiceUpdateHandler(
+            provider.GetRequiredService<DeferredTelegramHandlers>(),
+            provider.GetRequiredService<ITelegramVoiceFileClient>(),
+            provider.GetRequiredService<IVoiceTranscriber>(),
+            provider.GetRequiredService<ITelegramVoiceFeedback>(),
+            provider.GetRequiredService<IOptions<TelegramVoiceOptions>>().Value.ToLimits(),
+            provider.GetRequiredService<IOptions<TelegramOptions>>().Value.AdministratorUserId));
 
         services.AddScoped<ITelegramAuthorizedUpdateHandler>(
             provider =>

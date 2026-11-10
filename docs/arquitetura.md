@@ -310,9 +310,18 @@ pois URLs Telegram incluem o token do bot.
 O áudio permanece apenas em buffers limitados em memória, zerados
 após o uso. Não há retenção de áudio nem temporários em disco.
 
-O decorator não está registrado no dispatcher, e não existe um
-`IVoiceTranscriber` real registrado. A ativação aguarda a entrega da
-#19 e a validação do provedor, conforme decisão de escopo da #17.
+`GeminiVoiceTranscriber` implementa `IVoiceTranscriber`, com a fábrica
+Google.GenAI/MAF da #19 e áudio inline `audio/ogg`, sem ferramentas.
+`OggOpusValidator` valida o contêiner e decodifica com Concentus 2.2.2
+gerenciado, verificando duração efetiva, limites e silêncio em memória.
+Saída JSON inválida ou com sinais de incerteza é rejeitada; não há score
+de confiança tratado como prova de precisão.
+
+O transcritor e o decorator concreto são registrados por DI, mas o
+dispatcher continua usando `DeferredTelegramHandlers`. O decorator
+recebe esse handler explicitamente, evitando ciclos. A ativação aguarda
+smoke de áudio autorizado e a entrega do handler textual real, ausente
+na #19. Nenhuma chamada ao Google ocorre ao resolver os serviços.
 Os testes com fakes e HTTP local não comprovam transcrição real nem
 a proteção de mutações por ferramentas futuras do agente.
 
@@ -334,8 +343,10 @@ Google.GenAI 2.0.0, com Microsoft.Extensions.AI 10.11.0 transitivo.
 O modelo escolhido pelo usuário é `gemini-3.1-flash-lite`. O acesso e o
 Function Calling básico na conta foram validados nos dois smokes reais
 autorizados de 10/11/2026, usando somente conteúdo sintético.
-A estratégia de áudio permanece pendente; não há transcritor real
-nem substituição dos handlers Telegram nesta implementação.
+O adaptador de voz posterior da #17 reutiliza a fábrica e o MAF por
+`IVoiceTranscriber`, preservando `IAiModel` exclusivamente textual.
+A validação real de áudio e a substituição dos handlers Telegram permanecem
+pendentes; o smoke textual da #19 não comprova transcrição.
 
 O contrato retorna texto/uso ou falha tipada, sem tipos dos SDKs.
 O chamador deve validar autorização antes de invocá-lo. Cada chamada

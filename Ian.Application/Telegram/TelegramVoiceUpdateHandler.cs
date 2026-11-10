@@ -3,8 +3,8 @@ using System.Text.Json.Nodes;
 
 namespace Ian.Application.Telegram;
 
-// Decorates the authorized text handler once the real transcriber and T11 exist.
-// It is intentionally not installed in the live dispatcher before then.
+// Kept outside the live dispatcher until the authorized text pipeline and real
+// audio validation are available. The concrete decorator may be resolved in tests.
 public sealed class TelegramVoiceUpdateHandler(
     ITelegramAuthorizedUpdateHandler textHandler,
     ITelegramVoiceFileClient fileClient,

@@ -1,5 +1,6 @@
 using Ian.Application.Telegram;
 using Ian.Infrastructure;
+using Ian.Infrastructure.AI;
 using Ian.Infrastructure.Telegram;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,14 +11,16 @@ namespace Ian.Tests;
 public sealed class TelegramVoiceOptionsTests
 {
     [Fact]
-    public void DefaultsAreBoundedAndDoNotActivateAnUnvalidatedProvider()
+    public void VoiceServicesResolveWithoutActivatingTheLiveDispatcher()
     {
         using var provider = CreateProvider();
         var options = provider.GetRequiredService<IOptions<TelegramVoiceOptions>>().Value;
 
         Assert.Equal(new TelegramVoiceLimits(), options.ToLimits());
         Assert.IsType<DeferredTelegramHandlers>(provider.GetRequiredService<ITelegramAuthorizedUpdateHandler>());
-        Assert.Null(provider.GetService<IVoiceTranscriber>());
+        Assert.IsType<GeminiVoiceTranscriber>(provider.GetRequiredService<IVoiceTranscriber>());
+        using var scope = provider.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<TelegramVoiceUpdateHandler>());
     }
 
     [Fact]
