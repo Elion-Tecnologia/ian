@@ -34,6 +34,37 @@ public static class DependencyInjection
 
         services.AddScoped<ITelegramUpdateInboxWriter,TelegramUpdateInboxWriter>();
 
+        services.AddOptions<TelegramInboxProcessingOptions>()
+            .Validate(
+                options => options.IsValid(),
+                "As opções de processamento da inbox Telegram são inválidas.")
+            .ValidateOnStart();
+
+        services.AddSingleton(_ =>
+            NpgsqlDataSource.Create(
+                ReadPostgresConnectionString(configuration)));
+
+        services.AddScoped<
+            ITelegramInboxProcessingStore,
+            PostgresTelegramInboxProcessingStore>();
+
+        services.AddScoped<TelegramBusinessOperationExecutor>();
+
+        services.AddScoped<DeferredTelegramHandlers>();
+
+        services.AddScoped<ITelegramAuthorizedUpdateHandler>(
+            provider =>
+                provider.GetRequiredService<DeferredTelegramHandlers>());
+
+        services.AddScoped<ITelegramGroupEventHandler>(
+            provider =>
+                provider.GetRequiredService<DeferredTelegramHandlers>());
+
+        services.AddScoped<TelegramUpdateDispatcher>();
+        services.AddScoped<TelegramInboxConsumer>();
+
+        services.AddHostedService<TelegramInboxBackgroundService>();
+
         return services;
     }
     private static string ReadPostgresConnectionString(IConfiguration configuration)

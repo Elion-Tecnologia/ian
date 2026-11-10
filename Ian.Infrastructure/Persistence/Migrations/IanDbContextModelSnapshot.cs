@@ -356,30 +356,83 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Ian.Domain.Entities.TelegramBusinessOperation", b =>
+                {
+                    b.Property<long>("UpdateId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTimeOffset>("ExecutadoEmUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UpdateId", "OperationKey");
+
+                    b.ToTable("telegram_business_operations", (string)null);
+                });
+
             modelBuilder.Entity("Ian.Domain.Entities.TelegramUpdateInbox", b =>
                 {
                     b.Property<long>("UpdateId")
                         .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("ConcluidoEmUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Estado")
                         .IsRequired()
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
 
+                    b.Property<DateTimeOffset?>("IniciadoEmUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LockAteUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LockToken")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PayloadJson")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("ProximaTentativaEmUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("RecebidoEmUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Resultado")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Tentativas")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("UltimoErroCodigo")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
                     b.HasKey("UpdateId");
 
-                    b.HasIndex("Estado", "RecebidoEmUtc");
+                    b.HasIndex("Estado", "LockAteUtc");
+
+                    b.HasIndex("Estado", "ProximaTentativaEmUtc", "RecebidoEmUtc");
 
                     b.ToTable("telegram_updates_inbox", null, t =>
                         {
-                            t.HasCheckConstraint("ck_telegram_inbox_estado", "\"Estado\" IN ('Received')");
+                            t.HasCheckConstraint("ck_telegram_inbox_estado", "\"Estado\" IN (\r\n    'Received',\r\n    'Processing',\r\n    'Completed',\r\n    'FailedRetryable',\r\n    'FailedPaused'\r\n)");
+
+                            t.HasCheckConstraint("ck_telegram_inbox_lease", "(\r\n    \"Estado\" = 'Processing'\r\n    AND \"LockToken\" IS NOT NULL\r\n    AND \"LockAteUtc\" IS NOT NULL\r\n)\r\nOR\r\n(\r\n    \"Estado\" <> 'Processing'\r\n    AND \"LockToken\" IS NULL\r\n    AND \"LockAteUtc\" IS NULL\r\n)");
+
+                            t.HasCheckConstraint("ck_telegram_inbox_retry", "(\"Estado\" = 'FailedRetryable' AND \"ProximaTentativaEmUtc\" IS NOT NULL)\r\nOR\r\n(\"Estado\" <> 'FailedRetryable' AND \"ProximaTentativaEmUtc\" IS NULL)");
+
+                            t.HasCheckConstraint("ck_telegram_inbox_tentativas", "\"Tentativas\" >= 0");
 
                             t.HasCheckConstraint("ck_telegram_inbox_update_id", "\"UpdateId\" >= 0");
                         });
@@ -475,6 +528,15 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AgendamentoId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Ian.Domain.Entities.TelegramBusinessOperation", b =>
+                {
+                    b.HasOne("Ian.Domain.Entities.TelegramUpdateInbox", null)
+                        .WithMany()
+                        .HasForeignKey("UpdateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -47,7 +47,21 @@ public static class TelegramUpdateAuthorization
             return TelegramAuthorizationDecision.Denied;
         }
 
-        return TelegramAuthorizationDecision.Authorized;
+        var hasText =
+    message.TryGetProperty("text", out var text) &&
+    text.ValueKind == JsonValueKind.String &&
+    !string.IsNullOrWhiteSpace(text.GetString());
+
+        var hasVoice =
+            message.TryGetProperty("voice", out var voice) &&
+            voice.ValueKind == JsonValueKind.Object &&
+            voice.TryGetProperty("file_id", out var fileId) &&
+            fileId.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(fileId.GetString());
+
+        return hasText || hasVoice
+            ? TelegramAuthorizationDecision.Authorized
+            : TelegramAuthorizationDecision.NonCommandEvent;
     }
 
     public static bool TryGetGroupCandidate(

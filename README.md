@@ -172,3 +172,74 @@ dotnet test Ian.slnx --configuration Release --no-build --no-restore --logger "t
 ```
 
 Os testes usam configuração fictícia e isolada. A proteção que torna o check obrigatório é configurada separadamente nas regras da branch `dev`.
+
+
+## Processamento durável de atualizações Telegram (T08)
+
+As atualizações recebidas pelo webhook são persistidas no PostgreSQL antes da resposta HTTP 2xx. O `TelegramInboxBackgroundService` realiza o consumo posteriormente.
+
+### Estados
+
+- `Received`: atualização recebida e persistida.
+- `Processing`: atualização reivindicada com lease e token exclusivos.
+- `Completed`: processamento concluído, incluindo atualizações negadas pelo filtro de autorização.
+- `FailedRetryable`: falha que poderá ser processada novamente no horário programado.
+- `FailedPaused`: processamento pausado por limite de tentativas ou dependência indisponível.
+
+### Concorrência e recuperação
+
+O claim utiliza `FOR UPDATE SKIP LOCKED`, executado atomicamente com a mudança para `Processing`.
+
+Cada claim recebe um novo `LockToken`. As operações de renovação, conclusão e falha verificam esse token e a validade do lease.
+
+O lease padrão é de 2 minutos e o heartbeat ocorre a cada 20 segundos.
+
+Após uma queda, registros `Processing` com lease expirado tornam-se elegíveis para nova reivindicação.
+
+Falhas transitórias utilizam backoff exponencial, com intervalo máximo de 5 minutos e limite de 5 tentativas. Depois disso, o registro é pausado.
+
+Erros persistidos utilizam códigos sanitizados, sem armazenar mensagens de exceção.
+
+### Idempotência de negócio
+
+O `TelegramBusinessOperationExecutor` implementa uma barreira transacional com chave composta:
+
+`(UpdateId, OperationKey)`
+
+O registro da chave e a alteração de negócio devem ocorrer na mesma transação PostgreSQL.
+
+Para criação de agendamentos, a chave estável prevista é `agendamento:create`. Os futuros handlers administrativos devem executar suas escritas por meio desse executor.
+
+Essa abordagem impede repetir a mesma operação de banco para o mesmo update e chave.
+
+Ela não impede automaticamente duplicidades causadas por updates diferentes que representem a mesma intenção. Esses casos exigirão uma chave de solicitação ou confirmação de negócio persistente.
+
+### Limites de garantia
+
+O recebimento durável e a idempotência transacional não significam execução `exactly once` de todo o sistema.
+
+Se uma operação de banco for confirmada e o processo cair antes de marcar o update como `Completed`, o update poderá ser reexecutado. Nesse cenário, a chave de idempotência impede repetir a alteração protegida.
+
+Chamadas externas, como envios pela Telegram Bot API, não participam da transação PostgreSQL e não recebem garantia de `exactly once`. A política de envio e de repetição será implementada nas tarefas específicas de outbound.
+
+### Handlers ainda não implementados
+
+Enquanto não houver processamento real de comandos, atualizações administrativas e candidatos a vínculo de grupo são preservados em `FailedPaused` com `HandlerUnavailable`.
+
+Nenhum comando é executado por um handler provisório.
+
+Após a implementação do handler correspondente, os registros devem ser reativados de maneira controlada.
+
+### Observabilidade
+
+O processamento utiliza `update_id` e o identificador de correlação `tg-{update_id}`.
+
+Logs não incluem payloads, conteúdo de mensagens, telefones, endereços, tokens ou strings de conexão.
+
+### Testes
+
+Testes unitários verificam consumo, duplicidade, expiração do lease, retry, autorização e preservação das mensagens pendentes.
+
+Testes de integração PostgreSQL usam exclusivamente um banco descartável e a variável de ambiente `IAN_TEST_POSTGRES_CONNECTION_STRING`.
+
+Sem essa variável, os testes de integração são ignorados, não considerados validados.
