@@ -783,6 +783,12 @@ As decisões abaixo não devem ser confundidas com funcionalidades adicionais au
 
 Definir o modelo específico e validar capacidade de uso de ferramentas, processamento de áudio, limites e disponibilidade do nível gratuito do Google AI Studio.
 
+A #19 prepara `gemini-3.8-flash` como modelo textual configurável,
+com SDK oficial e MAF. Compilação e Function Calling foram verificados
+localmente com respostas sintéticas, sem validar disponibilidade ou
+quota da conta real. O smoke real e a decisão de áudio continuam
+pendentes. Evidências e versões: `docs/spikes/maf-gemini.md`.
+
 ### PT-02 — Estratégia de áudio
 
 Definir limites de tamanho e duração, abordagem de transcrição/interpretação e tratamento de falhas.
