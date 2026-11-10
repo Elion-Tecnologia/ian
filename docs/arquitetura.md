@@ -287,6 +287,36 @@ Portanto, a infraestrutura de recebimento e
 processamento existe, mas o fluxo funcional completo
 do agente ainda não está concluído.
 
+### 5.5 Preparação da entrada de voz (T09)
+
+A issue #17 adiciona os contratos `ITelegramVoiceFileClient`,
+`IVoiceTranscriber` e `ITelegramVoiceFeedback` em Application.
+`TelegramVoiceUpdateHandler` é um decorator do contrato administrativo
+existente, sem dependência de SDK e sem acesso ao banco.
+
+Ele reaplica a autorização, valida metadados e limites, obtém o áudio,
+solicita uma transcrição tipada e encaminha somente texto aceito ao
+handler textual. Falhas e necessidade de esclarecimento não alcançam
+esse handler. O adaptador real deve validar o conteúdo e sua duração
+efetiva; metadados Telegram não substituem essa validação.
+
+Infrastructure registra `TelegramVoiceFileClient` para download e
+fallback textual, e `TelegramVoiceOptions` com validação no startup.
+O transporte usa host fixo, rejeita caminhos de arquivo inválidos e
+desabilita redirecionamentos e handlers de logging de requisições,
+pois URLs Telegram incluem o token do bot.
+
+O áudio permanece apenas em buffers limitados em memória, zerados
+após o uso. Não há retenção de áudio nem temporários em disco.
+
+O decorator não está registrado no dispatcher, e não existe um
+`IVoiceTranscriber` real registrado. A ativação aguarda a entrega da
+#19 e a validação do provedor, conforme decisão de escopo da #17.
+Os testes com fakes e HTTP local não comprovam transcrição real nem
+a proteção de mutações por ferramentas futuras do agente.
+
+Ver `docs/spikes/voz.md` para evidências e passos de integração.
+
 ## 6. Integração com inteligência artificial
 
 ### 6.1 Tecnologias aprovadas

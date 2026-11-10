@@ -787,6 +787,13 @@ Definir o modelo específico e validar capacidade de uso de ferramentas, process
 
 Definir limites de tamanho e duração, abordagem de transcrição/interpretação e tratamento de falhas.
 
+Na preparação da issue #17, foram definidos limites iniciais configuráveis
+de 5 MiB, 120 segundos e timeout de 60 segundos, com download em memória
+e descarte dos buffers. A ativação e a escolha final do provedor continuam
+pendentes do spike real e da integração MAF/Gemini da #19. A duração e o
+formato efetivos deverão ser validados pelo adaptador, além dos metadados
+Telegram. Evidências e pendências: `docs/spikes/voz.md`.
+
 ### PT-03 — Hospedagem permanente
 
 Avaliar futuramente a necessidade de VPS ou outra infraestrutura para operação contínua, considerando custo, segurança e disponibilidade.

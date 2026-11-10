@@ -54,6 +54,7 @@ public static class TelegramUpdateParser
                 minimalMessage,
                 "voice",
                 "file_id",
+                "file_size",
                 "duration",
                 "mime_type");
 

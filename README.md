@@ -243,3 +243,64 @@ Testes unitários verificam consumo, duplicidade, expiração do lease, retry, a
 Testes de integração PostgreSQL usam exclusivamente um banco descartável e a variável de ambiente `IAN_TEST_POSTGRES_CONNECTION_STRING`.
 
 Sem essa variável, os testes de integração são ignorados, não considerados validados.
+
+## Entrada de voz (T09 — preparação para T11)
+
+O suporte de voz está preparado e testado com fakes e HTTP local, mas ainda não
+está ativado no dispatcher da API. Por decisão de implementação da issue #17,
+a integração final aguarda a #19 (MAF/Gemini) e o spike real do provedor de
+transcrição. `DeferredTelegramHandlers` continua preservando os comandos em
+`FailedPaused`; a existência dos componentes abaixo não significa que o bot
+já transcreve áudios em produção.
+
+`TelegramVoiceFileClient` implementa `getFile`, download limitado em memória e
+respostas textuais de erro/esclarecimento. `TelegramVoiceUpdateHandler` pode
+envolver o handler textual autorizado, recebendo um `IVoiceTranscriber` real.
+O decorator reaplica o mesmo filtro de autorização, preserva a identidade do
+update e só encaminha a transcrição aceita ao handler textual. O payload
+persistido da inbox não é substituído pela transcrição.
+
+As configurações não secretas estão em `TelegramVoice`:
+
+| Chave | Padrão | Intervalo aceito |
+| --- | --- | --- |
+| `MaxBytes` | 5242880 (5 MiB) | 1 a 20000000 bytes |
+| `MaxDurationSeconds` | 120 | 1 a 3600 segundos |
+| `TimeoutSeconds` | 60 | 1 a 300 segundos |
+
+Também podem ser fornecidas por `TelegramVoice__MaxBytes`,
+`TelegramVoice__MaxDurationSeconds` e `TelegramVoice__TimeoutSeconds`.
+Valores inválidos impedem a inicialização. O timeout do decorator cobre
+download e transcrição; o cliente HTTP também limita cada operação de forma
+independente quando utilizado diretamente.
+
+Tamanho e duração declarados são validados antes do download. O cliente
+verifica o tamanho retornado por `getFile`, `Content-Length` e os bytes
+efetivamente lidos, inclusive em respostas sem tamanho declarado. MIME e
+duração declarados não comprovam o conteúdo: o adaptador de transcrição deverá
+validar formato, duração efetiva e qualidade antes de retornar sucesso.
+
+Não há arquivos temporários em disco. Streams e respostas HTTP são descartados,
+e os buffers de áudio são zerados ao terminar a transcrição, inclusive em
+exceções e cancelamento. Transcrição vazia ou `NeedsClarification` produz uma
+resposta de esclarecimento, sem encaminhamento ao handler textual.
+
+Falhas conhecidas geram fallback textual e exigem nova tentativa da
+administradora; o componente não adiciona retries HTTP automáticos. Falha de
+aceitação do fallback pelo Telegram lança uma exceção sanitizada, permitindo
+a política já existente da inbox. Isso pode repetir uma resposta externa em
+caso de resultado incerto; não há garantia `exactly once` para `sendMessage`.
+Cancelamento do host/perda do lease é propagado, sem enviar fallback.
+
+A aprovação da transcrição não autoriza mutações: ambiguidade semântica,
+confirmações e regras de negócio continuam a cargo do pipeline textual/backend.
+A política desses casos ainda depende das funcionalidades futuras do agente.
+
+Para reproduzir os testes novos:
+
+```powershell
+dotnet test Ian.slnx --configuration Release --filter "FullyQualifiedName~TelegramVoice"
+```
+
+Consulte [a avaliação e as pendências do provedor](docs/spikes/voz.md) antes
+de ativar o fluxo.
