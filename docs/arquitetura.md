@@ -20,7 +20,7 @@ componentes existentes e as responsabilidades técnicas.
 
 A base da integração textual da #19 foi consultada na branch `dev`,
 commit `7a3d969`, em 10/11/2026. A implementação descrita na seção 6
-foi verificada localmente em `feature/maf-gemini`; o smoke real está pendente.
+foi verificada em `feature/maf-gemini`, com os dois smokes reais aprovados.
 
 As funcionalidades descritas como planejadas não devem
 ser consideradas implementadas sem verificação no código.
@@ -331,8 +331,9 @@ A implementação da #19 disponibiliza `IAiModel` em Application e
 SDK oficial `Google.GenAI`. As versões verificadas são MAF 1.28.0 e
 Google.GenAI 2.0.0, com Microsoft.Extensions.AI 10.11.0 transitivo.
 
-O modelo textual inicial configurado é `gemini-3.8-flash`. Sua
-disponibilidade e Function Calling na conta real ainda aguardam smoke.
+O modelo escolhido pelo usuário é `gemini-3.1-flash-lite`. O acesso e o
+Function Calling básico na conta foram validados nos dois smokes reais
+autorizados de 10/11/2026, usando somente conteúdo sintético.
 A estratégia de áudio permanece pendente; não há transcritor real
 nem substituição dos handlers Telegram nesta implementação.
 
@@ -349,7 +350,7 @@ limitados a uma tentativa, sem repetição automática. O timeout inclui
 toda a invocação; cancelamento externo é propagado. Logs e resultados
 de falha não expõem prompts, respostas completas, chave ou exceções do
 fornecedor. Ver `docs/spikes/maf-gemini.md` para a matriz de erros e
-as evidências locais versus validações reais pendentes.
+as evidências locais/reais e as limitações de validação.
 
 ### 6.2 Responsabilidades do agente
 

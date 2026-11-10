@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Google.GenAI;
 using Ian.Api;
 using Ian.Application.AI;
 using Ian.Infrastructure;
@@ -17,11 +20,14 @@ public sealed class GeminiSmokeTests(ITestOutputHelper output)
     {
         using var provider = Provider();
         var options = provider.GetRequiredService<IOptions<GeminiOptions>>().Value;
+        var elapsed = Stopwatch.StartNew();
         var result = await provider.GetRequiredService<IAiModel>()
             .InvokeAsync("Responda somente com a palavra OK.");
+        elapsed.Stop();
 
-        output.WriteLine("Model={0}; timeout={1}s; result={2}; usage={3}",
-            options.Model, options.TimeoutSeconds, result.Failure?.ToString() ?? "Success", result.Usage);
+        output.WriteLine("Model={0}; timeout={1}s; latency_ms={2}; result={3}; usage={4}",
+            options.Model, options.TimeoutSeconds, elapsed.ElapsedMilliseconds,
+            result.Failure?.ToString() ?? "Success", result.Usage);
         Assert.True(result.IsSuccess, result.ErrorMessage);
         Assert.False(string.IsNullOrWhiteSpace(result.Text));
     }
@@ -34,23 +40,59 @@ public sealed class GeminiSmokeTests(ITestOutputHelper output)
         var settings = provider.GetRequiredService<IOptions<GeminiOptions>>().Value;
         Assert.True(settings.IsValid(), "Configure Gemini:ApiKey, Gemini:Model e Gemini:TimeoutSeconds por fonte segura.");
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.TimeoutSeconds));
+        var elapsed = Stopwatch.StartNew();
         GeminiFunctionDemo.DemoResult? result = null;
         try
         {
             result = await GeminiFunctionDemo.RunAsync(
                 provider.GetRequiredService<GeminiChatClientFactory>().GetClient(), timeout.Token);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            output.WriteLine("Model={0}; timeout={1}s; latency_ms={2}; result={3}",
+                settings.Model, settings.TimeoutSeconds, elapsed.ElapsedMilliseconds,
+                Classify(exception, timeout.IsCancellationRequested));
             Assert.Fail("O smoke real de Function Calling falhou. Detalhes do provedor foram omitidos para preservar segredos.");
         }
 
+        elapsed.Stop();
         Assert.NotNull(result);
-        output.WriteLine("Model={0}; demo_invocations={1}; arguments_correct={2}; final_text={3}",
-            settings.Model, result.Invocations, result.ArgumentsCorrect, !string.IsNullOrWhiteSpace(result.Text));
+        output.WriteLine("Model={0}; timeout={1}s; latency_ms={2}; demo_invocations={3}; arguments_correct={4}; final_text={5}; input_tokens={6}; output_tokens={7}; total_tokens={8}",
+            settings.Model, settings.TimeoutSeconds, elapsed.ElapsedMilliseconds,
+            result.Invocations, result.ArgumentsCorrect, !string.IsNullOrWhiteSpace(result.Text),
+            result.Usage?.InputTokenCount, result.Usage?.OutputTokenCount, result.Usage?.TotalTokenCount);
         Assert.Equal(1, result.Invocations);
         Assert.True(result.ArgumentsCorrect);
         Assert.False(string.IsNullOrWhiteSpace(result.Text));
+        Assert.True(result.Text.Contains('5'), "A resposta final deve incluir o resultado da soma sintética.");
+    }
+
+    // Only a classification escapes: never the provider exception message/body.
+    private static AiModelFailure Classify(Exception exception, bool timedOut)
+    {
+        if (timedOut || exception is OperationCanceledException)
+        {
+            return AiModelFailure.Timeout;
+        }
+
+        var status = exception switch
+        {
+            ApiException api => api.StatusCode,
+            HttpRequestException http => (int?)http.StatusCode ?? 0,
+            _ => -1
+        };
+        return status switch
+        {
+            401 or 403 => AiModelFailure.AuthenticationFailed,
+            429 => AiModelFailure.QuotaExceeded,
+            408 or 504 => AiModelFailure.Timeout,
+            404 => AiModelFailure.ModelUnavailable,
+            0 or >= 500 => AiModelFailure.ProviderUnavailable,
+            >= 400 => AiModelFailure.ProviderRejected,
+            _ when exception is JsonException => AiModelFailure.InvalidResponse,
+            _ when exception is OptionsValidationException => AiModelFailure.InvalidConfiguration,
+            _ => AiModelFailure.UnexpectedFailure
+        };
     }
 
     private static ServiceProvider Provider()

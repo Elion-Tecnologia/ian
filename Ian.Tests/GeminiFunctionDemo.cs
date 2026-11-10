@@ -24,8 +24,8 @@ internal static class GeminiFunctionDemo
         var response = await agent.RunAsync(
             "Call sum_demo once with left=2 and right=3. Then return its result as text.",
             cancellationToken: cancellationToken);
-        return new DemoResult(invocations, argumentsCorrect, response.Text);
+        return new DemoResult(invocations, argumentsCorrect, response.Text, response.Usage);
     }
 
-    internal sealed record DemoResult(int Invocations, bool ArgumentsCorrect, string Text);
+    internal sealed record DemoResult(int Invocations, bool ArgumentsCorrect, string Text, UsageDetails? Usage);
 }

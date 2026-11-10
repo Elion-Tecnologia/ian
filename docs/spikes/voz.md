@@ -26,7 +26,7 @@ nome de modelo ou pacote fixado no código.
 | --- | --- |
 | Candidato | Gemini Developer API / Google AI Studio |
 | Capacidade declarada | Transcrição e entrada OGG/Opus; validar com voz Telegram em português no smoke |
-| Exemplo de modelo nos documentos de áudio | `gemini-3.8-flash`; disponibilidade na conta não verificada |
+| Exemplo de modelo na consulta original da #17 | `gemini-3.8-flash`; disponibilidade na conta não verificada naquela etapa |
 | Versão de SDK/API testada | Nenhuma; não foram adicionados pacotes de IA |
 | Custo publicado, Standard pago | US$ 0,75 por milhão de tokens de entrada e US$ 3,75 por milhão de tokens de saída, incluindo thinking, até 31/12/2026; US$ 1,50 e US$ 7,50 a partir de 01/01/2027 |
 | Custo medido | Não medido; o custo final também inclui prompt, saída e possíveis tentativas |
@@ -34,8 +34,15 @@ nome de modelo ou pacote fixado no código.
 | Privacidade | Os níveis Free e Paid têm políticas diferentes de uso de conteúdo; confirmar o nível e os termos antes de enviar dados de clientes |
 
 Fontes oficiais: [áudio e formatos](https://ai.google.dev/gemini-api/docs/audio),
-[preços do candidato](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash)
+[preços do candidato original](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash)
 e [quotas](https://ai.google.dev/gemini-api/docs/rate-limits).
+
+Atualização da #19 em 10/11/2026: o usuário escolheu
+`gemini-3.1-flash-lite` para o IA.N. Os dois smokes de texto e Function
+Calling passaram com MAF e SDK oficial; ver [evidências](maf-gemini.md).
+Esta tabela preserva a consulta histórica da #17; seus preços não devem
+ser aplicados ao modelo agora escolhido. Áudio não foi enviado nem
+validado, e o fluxo de voz permanece desativado.
 
 ## Contrato Telegram avaliado
 

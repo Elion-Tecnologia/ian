@@ -318,7 +318,7 @@ Configuração necessária para invocar o serviço:
 | Chave | Configuração |
 | --- | --- |
 | `Gemini:ApiKey` | Obrigatória; somente User Secrets ou fonte segura equivalente |
-| `Gemini:Model` | ID de modelo; o appsettings sugere `gemini-3.8-flash` |
+| `Gemini:Model` | ID de modelo; o appsettings sugere `gemini-3.1-flash-lite` |
 | `Gemini:TimeoutSeconds` | De 1 a 300 segundos; padrão 60 |
 
 Use `Gemini__ApiKey`, `Gemini__Model` e `Gemini__TimeoutSeconds` para
@@ -338,7 +338,7 @@ try {
 } finally {
     Remove-Variable geminiSecret
 }
-dotnet user-secrets set 'Gemini:Model' 'gemini-3.8-flash' --project Ian.Api
+dotnet user-secrets set 'Gemini:Model' 'gemini-3.1-flash-lite' --project Ian.Api
 dotnet user-secrets set 'Gemini:TimeoutSeconds' '60' --project Ian.Api
 ```
 
@@ -360,8 +360,13 @@ O smoke lê User Secrets de `Ian.Api` e variáveis de ambiente, resolve a
 infraestrutura de produção, usa apenas um prompt sintético e uma função
 de soma isolada em testes. Não imprime chave nem resposta completa.
 O teste de Function Calling pode consumir mais de uma chamada ao modelo.
-Nesta entrega, o usuário optou por não executar o smoke real: disponibilidade,
-qualidade, quota e Function Calling na conta ainda não estão validados.
+Em 10/11/2026, os dois smokes reais autorizados passaram com
+`gemini-3.1-flash-lite`: retorno textual pelo `IAiModel` e ciclo de
+`sum_demo` com os argumentos esperados. As latências foram 1710 ms e
+21475 ms, e o uso informado totalizou 219 tokens. As variáveis temporárias
+foram removidas. Isso valida acesso e Function Calling básico nessa conta;
+não valida áudio, qualidade de negócio ou limites de quota/faturamento.
+Os sete testes PostgreSQL continuam sem execução e a PR #76 permanece Draft.
 
 Detalhes técnicos, limites e evidências em
 [docs/spikes/maf-gemini.md](docs/spikes/maf-gemini.md).

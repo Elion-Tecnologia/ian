@@ -75,7 +75,7 @@ public sealed class GeminiSdkTests
         app.MapPost("/{**path}", async context =>
         {
             Assert.Equal("synthetic-key", context.Request.Headers["x-goog-api-key"].ToString());
-            Assert.Contains("gemini-3.8-flash", context.Request.Path.Value);
+            Assert.Contains("gemini-3.1-flash-lite", context.Request.Path.Value);
             using var body = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted);
             var call = Interlocked.Increment(ref calls);
             if (call == 1)
@@ -114,7 +114,7 @@ public sealed class GeminiSdkTests
     private static IOptions<GeminiOptions> Settings() => Options.Create(new GeminiOptions
     {
         ApiKey = "synthetic-key",
-        Model = "gemini-3.8-flash",
+        Model = "gemini-3.1-flash-lite",
         TimeoutSeconds = 5
     });
 

@@ -1,6 +1,6 @@
 # T11 — Integração MAF/Gemini
 
-Investigação e validação local em 10/11/2026. Base: `dev` em `7a3d969`,
+Investigação, validação local e smokes reais em 10/11/2026. Base: `dev` em `7a3d969`,
 com a preparação de voz da #17 integrada. Escopo: [#19](https://github.com/Elion-Tecnologia/ian/issues/19).
 
 ## Pré-requisitos e divergência
@@ -118,19 +118,21 @@ e [tratamento de falhas Gemini](https://ai.google.dev/gemini-api/docs/troublesho
 
 ## Modelo, quota e limites
 
-O appsettings sugere `gemini-3.8-flash`, ID estável publicado pelo Google
-com Function Calling e entrada textual. A escolha inicial acompanha o
-modelo atual da família Flash e a avaliação documental da #17; continua
-configurável e não ativa áudio. Não foram usados nomes de modelos retirados
-de exemplos antigos como garantia de disponibilidade na conta.
+O modelo escolhido explicitamente pelo usuário para o IA.N é
+`gemini-3.1-flash-lite`. O appsettings, os exemplos e os User Secrets foram
+atualizados para esse ID, preservando a credencial existente. O Google o
+publica como estável, com entrada textual e Function Calling, voltado a
+baixa latência e custo. Continua configurável e não ativa áudio.
 
-O suporte é declarado pelo [fornecedor](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash),
+O suporte é declarado pelo [fornecedor](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite),
 mas não comprova acesso pelo projeto Google, comportamento real, região,
 precisão ou cotas. Os limites ativos de RPM/TPM/RPD variam por projeto/modelo
 e devem ser verificados no AI Studio. Ver [quotas](https://ai.google.dev/gemini-api/docs/rate-limits),
-[preços](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash) e
+[preços](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.1-flash-lite) e
 [Function Calling](https://ai.google.dev/gemini-api/docs/function-calling).
-Não houve consumo medido nem cobrança provocada por esta tarefa.
+Os smokes autorizados consumiram tokens reais, registrados abaixo.
+O plano de faturamento, o saldo de quota e o valor efetivamente cobrado
+não foram consultados; não se presume execução gratuita.
 
 ## Evidências de Function Calling
 
@@ -140,35 +142,81 @@ chave sintética existem somente nos testes. O teste verifica o schema da
 função enviado, os argumentos interpretados, uma execução de soma sem
 efeitos colaterais, `functionResponse` na segunda requisição e texto final.
 
-Isso comprova o encadeamento técnico local, incluindo serialização e
-HTTP, com respostas sintéticas. Não comprova que o modelo real solicitará
-a função. A função vive somente em Ian.Tests; não há ferramentas de
+Esse teste local comprova o encadeamento técnico, incluindo serialização
+e HTTP, com respostas sintéticas. A solicitação da função pelo modelo real
+foi validada separadamente no smoke abaixo. A função vive somente em
+Ian.Tests; não há ferramentas de
 agenda, clientes ou equipes em produção. Chamadas de função não solicitadas
 são rejeitadas pelo adaptador em um teste específico, sem loop de execução.
 
-## Smoke real preparado, não executado
+## Smokes reais autorizados e aprovados
 
-O usuário escolheu explicitamente preparar o smoke sem executá-lo nesta
-tarefa. Não houve leitura, descoberta ou exibição de segredos locais para
-essa finalidade. Os testes reais ficam ignorados por padrão e exigem
-os dois opt-ins `IAN_RUN_GEMINI_SMOKE=1` e `IAN_ALLOW_GEMINI_QUOTA=1`.
+Após a preparação inicial sem consumo, o usuário autorizou explicitamente
+os dois smokes, inclusive quota e eventual cobrança, com
+`gemini-3.1-flash-lite`. A execução começou em 10/11/2026 às
+20:07:23 UTC (17:07:23 em America/Sao_Paulo), com timeout de 60 segundos.
+A presença da propriedade da chave foi verificada sem acessar ou exibir
+seu valor; somente o runtime carregou a credencial para autenticação.
+Nenhum dado real de cliente, áudio, mensagem Telegram ou banco foi usado.
+
+| Teste real | Resultado | Latência da invocação | Tokens de entrada | Tokens de saída | Total informado |
+| --- | --- | --- | --- | --- | --- |
+| `RealGeminiReturnsTextThroughProductionContract` | Aprovado; `IAiModel` retornou sucesso e texto não vazio | 1710 ms | 10 | 2 | 12 |
+| `RealGeminiCallsOnlyTheIsolatedDemoFunction` | Aprovado; uma chamada de `sum_demo`, argumentos 2 e 3 corretos, resultado integrado ao texto final | 21475 ms | 188 | 19 | 207 |
+
+Os 219 tokens são a soma do uso informado pelo SDK/MAF nos dois resultados,
+sem estimativa de cobrança nem comprovação independente do faturamento.
+Não foram registrados chave, respostas completas ou corpos privados.
+Nenhuma falha de autenticação, quota, modelo ou timeout ocorreu; não houve
+nova tentativa. A conclusão dentro de 60 segundos valida o caminho de
+sucesso com esse limite, sem simular um timeout real no Google.
 
 `GeminiSmokeTests.RealGeminiReturnsTextThroughProductionContract` usa
 User Secrets de Ian.Api/variáveis de ambiente, o registro DI de produção
 e o prompt sintético solicitado. Não exige uma redação exata da resposta;
-registra somente modelo, timeout, resultado e uso agregado se disponível.
+registra somente modelo, timeout, latência, resultado e uso agregado
+se disponível.
 `RealGeminiCallsOnlyTheIsolatedDemoFunction` usa a mesma fábrica de cliente
-e uma ferramenta de demonstração restrita aos testes.
+e uma ferramenta de demonstração restrita aos testes. O segundo smoke
+verificou que o modelo solicitou a função, seus argumentos foram
+interpretados, a soma local retornou ao fluxo e o texto final continha
+o resultado. O adaptador textual de produção continua sem ferramentas.
+
+Os testes foram executados em sequência, uma vez cada, com filtro
+`Category=GeminiSmoke` combinado ao nome de cada teste, para interromper
+antes do segundo em caso de falha no primeiro:
+
+```powershell
+$env:IAN_RUN_GEMINI_SMOKE = '1'
+$env:IAN_ALLOW_GEMINI_QUOTA = '1'
+try {
+    dotnet test Ian.slnx --configuration Release --no-build --no-restore --filter 'Category=GeminiSmoke&FullyQualifiedName~RealGeminiReturnsTextThroughProductionContract' --logger 'console;verbosity=detailed'
+    if ($LASTEXITCODE -ne 0) { throw 'Interromper para diagnóstico.' }
+    dotnet test Ian.slnx --configuration Release --no-build --no-restore --filter 'Category=GeminiSmoke&FullyQualifiedName~RealGeminiCallsOnlyTheIsolatedDemoFunction' --logger 'console;verbosity=detailed'
+    if ($LASTEXITCODE -ne 0) { throw 'Interromper para diagnóstico.' }
+} finally {
+    Remove-Item Env:IAN_RUN_GEMINI_SMOKE, Env:IAN_ALLOW_GEMINI_QUOTA -ErrorAction SilentlyContinue
+}
+```
+
+Ambos os processos encerraram com código zero. As variáveis temporárias
+foram removidas em `finally`. Os testes reais continuam ignorados por
+padrão; qualquer execução futura exige nova autorização de consumo.
+As chamadas previstas são uma geração textual e duas gerações no ciclo
+de função; a contagem HTTP efetiva não foi instrumentada no smoke.
 
 O [README](../../README.md#integração-mafgemini-t11) contém entrada oculta da
 chave via JSON/stdin para User Secrets e os comandos de execução manual.
 O smoke deve ocorrer apenas após autorização de quota, nunca como parte
 dos testes comuns ou como substituto de validação real por fake.
 
-Permanecem sem validação: chave funcional, disponibilidade do modelo na
-conta, latência/timeout no serviço real, consumo real e Function Calling
-com respostas geradas pelo Google. Portanto a publicação deve usar
-`Refs #19` e Draft PR; a issue não está concluída.
+A chave funcional, o acesso ao modelo, o retorno pelo contrato e o
+Function Calling básico foram validados nesta conta. Não foram provocadas
+falhas reais de autenticação, 429 ou timeout para consumir novas chamadas;
+sua classificação permanece coberta por testes locais. Limites efetivos
+da conta, qualidade em cenários de negócio e transcrição de áudio não
+foram validados. A PR #76 permanece Draft com `Refs #19`, para revisão do
+usuário e enquanto os sete testes PostgreSQL seguem sem execução.
 
 ## Relação com a #17
 
@@ -207,12 +255,12 @@ validados:
 - `ExpiredLeaseIsRecoveredByAnotherConsumer`
 - `RetryRespectsScheduledTime`
 
-Os outros dois ignorados são `GeminiSmokeTests.RealGeminiReturnsTextThroughProductionContract`
-e `GeminiSmokeTests.RealGeminiCallsOnlyTheIsolatedDemoFunction`: o usuário
-optou por não consumir quota agora. Eles não são considerados aprovados.
+Os outros dois ignorados na suíte comum são os smokes acima: seus opt-ins
+foram removidos. Eles foram aprovados na execução real separada, uma vez
+cada, e não são contabilizados como aprovados pela execução comum.
 
 A revisão local não encontrou segredos reais, áudios, dados de clientes
 ou artefatos temporários nos arquivos da alteração. Não há mudanças em
 Domain, contratos de webhook, handlers Telegram, migrations ou regras de
-negócio. A implementação está preparada para Draft PR, com aceite final
-pendente de smoke e evidência real de Function Calling.
+negócio. A Draft PR #76 reúne as evidências reais para revisão; os testes
+PostgreSQL continuam pendentes e a issue #19 não foi fechada.

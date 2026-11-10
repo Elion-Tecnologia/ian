@@ -52,7 +52,7 @@ public sealed class GeminiConfigurationTests
         using var provider = Provider(validDefaults: true);
         var options = provider.GetRequiredService<IOptions<GeminiOptions>>().Value;
         Assert.True(options.IsValid());
-        Assert.Equal("gemini-3.8-flash", options.Model);
+        Assert.Equal("gemini-3.1-flash-lite", options.Model);
         Assert.Equal(60, options.TimeoutSeconds);
         Assert.DoesNotContain("synthetic-key", options.ToString());
     }
@@ -68,7 +68,7 @@ public sealed class GeminiConfigurationTests
         if (validDefaults)
         {
             configuration["Gemini:ApiKey"] = "synthetic-key";
-            configuration["Gemini:Model"] = "gemini-3.8-flash";
+            configuration["Gemini:Model"] = "gemini-3.1-flash-lite";
         }
         if (key is not null) configuration[key] = value;
         return new ServiceCollection().AddInfrastructure(configuration).BuildServiceProvider();

@@ -30,7 +30,7 @@ public sealed class GeminiAiModelTests
         Assert.NotNull(fake.Options);
         Assert.Equal(ChatToolMode.None, fake.Options.ToolMode);
         Assert.True(fake.Options.Tools is null || fake.Options.Tools.Count == 0);
-        Assert.Equal("gemini-3.8-flash", fake.Options.ModelId);
+        Assert.Equal("gemini-3.1-flash-lite", fake.Options.ModelId);
         Assert.Equal("synthetic prompt", Assert.Single(fake.Messages).Text);
     }
 
@@ -227,7 +227,7 @@ public sealed class GeminiAiModelTests
         new(Options.Create(new GeminiOptions
         {
             ApiKey = "synthetic-key",
-            Model = "gemini-3.8-flash",
+            Model = "gemini-3.1-flash-lite",
             TimeoutSeconds = timeoutSeconds
         }), () => fake);
 
