@@ -304,3 +304,69 @@ dotnet test Ian.slnx --configuration Release --filter "FullyQualifiedName~Telegr
 
 Consulte [a avaliação e as pendências do provedor](docs/spikes/voz.md) antes
 de ativar o fluxo.
+
+## Integração MAF/Gemini (T11)
+
+`Ian.Application.AI.IAiModel` disponibiliza invocação textual com resultado
+tipado. `GeminiAiModel` usa MAF `ChatClientAgent.RunAsync`, `IChatClient` e
+o SDK oficial Google.GenAI. O chamador deverá autorizar o prompt antes da
+invocação. A integração não ativa os handlers Telegram, não transcreve
+áudio, não mantém histórico e não instala ferramentas de negócio.
+
+Configuração necessária para invocar o serviço:
+
+| Chave | Configuração |
+| --- | --- |
+| `Gemini:ApiKey` | Obrigatória; somente User Secrets ou fonte segura equivalente |
+| `Gemini:Model` | ID de modelo; o appsettings sugere `gemini-3.1-flash-lite` |
+| `Gemini:TimeoutSeconds` | De 1 a 300 segundos; padrão 60 |
+
+Use `Gemini__ApiKey`, `Gemini__Model` e `Gemini__TimeoutSeconds` para
+variáveis de ambiente. A validação ocorre na invocação e produz
+`InvalidConfiguration` sem expor valores, preservando o startup da API
+enquanto a integração ainda não está ativada.
+
+Para cadastrar a chave em Development pelo PowerShell, sem exibi-la nem
+incluí-la em argumentos/histórico, use entrada oculta e JSON por stdin:
+
+```powershell
+$geminiSecret = Read-Host 'Chave Gemini' -AsSecureString
+try {
+    @{ 'Gemini:ApiKey' = [System.Net.NetworkCredential]::new('', $geminiSecret).Password } |
+        ConvertTo-Json -Compress |
+        dotnet user-secrets set --project Ian.Api
+} finally {
+    Remove-Variable geminiSecret
+}
+dotnet user-secrets set 'Gemini:Model' 'gemini-3.1-flash-lite' --project Ian.Api
+dotnet user-secrets set 'Gemini:TimeoutSeconds' '60' --project Ian.Api
+```
+
+Os testes comuns usam fakes e HTTP local, sem tokens Google. Os dois testes
+manuais estão ignorados por padrão. Somente após configurar a credencial
+e autorizar o consumo de quota, execute:
+
+```powershell
+$env:IAN_RUN_GEMINI_SMOKE = '1'
+$env:IAN_ALLOW_GEMINI_QUOTA = '1'
+try {
+    dotnet test Ian.slnx --configuration Release --filter 'Category=GeminiSmoke' --logger 'console;verbosity=normal'
+} finally {
+    Remove-Item Env:IAN_RUN_GEMINI_SMOKE, Env:IAN_ALLOW_GEMINI_QUOTA
+}
+```
+
+O smoke lê User Secrets de `Ian.Api` e variáveis de ambiente, resolve a
+infraestrutura de produção, usa apenas um prompt sintético e uma função
+de soma isolada em testes. Não imprime chave nem resposta completa.
+O teste de Function Calling pode consumir mais de uma chamada ao modelo.
+Em 10/11/2026, os dois smokes reais autorizados passaram com
+`gemini-3.1-flash-lite`: retorno textual pelo `IAiModel` e ciclo de
+`sum_demo` com os argumentos esperados. As latências foram 1710 ms e
+21475 ms, e o uso informado totalizou 219 tokens. As variáveis temporárias
+foram removidas. Isso valida acesso e Function Calling básico nessa conta;
+não valida áudio, qualidade de negócio ou limites de quota/faturamento.
+Os sete testes PostgreSQL continuam sem execução e a PR #76 permanece Draft.
+
+Detalhes técnicos, limites e evidências em
+[docs/spikes/maf-gemini.md](docs/spikes/maf-gemini.md).

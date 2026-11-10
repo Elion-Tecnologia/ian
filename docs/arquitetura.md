@@ -18,8 +18,9 @@ consistência dos dados e das agendas.
 Este documento descreve a arquitetura aprovada, os
 componentes existentes e as responsabilidades técnicas.
 
-O estado de implementação foi consultado na branch `dev`,
-commit `1d26bda`, em 10/11/2026.
+A base da integração textual da #19 foi consultada na branch `dev`,
+commit `7a3d969`, em 10/11/2026. A implementação descrita na seção 6
+foi verificada em `feature/maf-gemini`, com os dois smokes reais aprovados.
 
 As funcionalidades descritas como planejadas não devem
 ser consideradas implementadas sem verificação no código.
@@ -324,11 +325,32 @@ Ver `docs/spikes/voz.md` para evidências e passos de integração.
 - Microsoft Agent Framework (MAF).
 - Gemini via Google AI Studio.
 
-A integração ainda está planejada na versão
-do código consultada.
+A implementação da #19 disponibiliza `IAiModel` em Application e
+`GeminiAiModel` em Infrastructure. O adaptador invoca efetivamente
+`ChatClientAgent.RunAsync` do MAF, sobre `IChatClient` fornecido pelo
+SDK oficial `Google.GenAI`. As versões verificadas são MAF 1.28.0 e
+Google.GenAI 2.0.0, com Microsoft.Extensions.AI 10.11.0 transitivo.
 
-O modelo específico do Gemini e a estratégia
-de processamento de áudio ainda exigem definição.
+O modelo escolhido pelo usuário é `gemini-3.1-flash-lite`. O acesso e o
+Function Calling básico na conta foram validados nos dois smokes reais
+autorizados de 10/11/2026, usando somente conteúdo sintético.
+A estratégia de áudio permanece pendente; não há transcritor real
+nem substituição dos handlers Telegram nesta implementação.
+
+O contrato retorna texto/uso ou falha tipada, sem tipos dos SDKs.
+O chamador deve validar autorização antes de invocá-lo. Cada chamada
+usa um agente/sessão novo; não há persistência de conversas nesta etapa.
+Não existem ferramentas registradas em produção, e chamadas de função
+inesperadas são rejeitadas como resposta inválida. A demonstração sem
+efeitos colaterais vive somente em Ian.Tests.
+
+`GeminiChatClientFactory` gerencia o transporte e o cliente compartilhado
+sem histórico, e os descarta com o contêiner DI. Retries do SDK estão
+limitados a uma tentativa, sem repetição automática. O timeout inclui
+toda a invocação; cancelamento externo é propagado. Logs e resultados
+de falha não expõem prompts, respostas completas, chave ou exceções do
+fornecedor. Ver `docs/spikes/maf-gemini.md` para a matriz de erros e
+as evidências locais/reais e as limitações de validação.
 
 ### 6.2 Responsabilidades do agente
 
@@ -479,9 +501,16 @@ Configurações existentes:
 - `Telegram:WebhookSecret`
 - `Telegram:PublicBaseUrl` (opcional)
 - `ConnectionStrings:Default`
+- `Gemini:ApiKey` (secreta)
+- `Gemini:Model`
+- `Gemini:TimeoutSeconds`
 
 As opções de Telegram são validadas na
 inicialização da aplicação.
+
+Gemini é validado na invocação: configuração ausente/inválida resulta
+em `InvalidConfiguration`, sem chamada ao provedor. Isso preserva o
+startup e os endpoints existentes enquanto a IA não estiver ativada.
 
 Logs não devem expor mensagens privadas,
 tokens, telefones, endereços ou segredos.

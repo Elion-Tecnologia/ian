@@ -7,6 +7,8 @@ using Ian.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Ian.Application.Telegram;
+using Ian.Application.AI;
+using Ian.Infrastructure.AI;
 
 namespace Ian.Infrastructure;
 
@@ -14,6 +16,28 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        // AI remains inactive until invoked. Missing AI credentials must not stop Telegram/health.
+        services.AddOptions<GeminiOptions>().Configure(options =>
+        {
+            var gemini = configuration.GetSection(GeminiOptions.SectionName);
+            options.ApiKey = gemini[nameof(GeminiOptions.ApiKey)] ?? string.Empty;
+            options.Model = gemini[nameof(GeminiOptions.Model)] ?? string.Empty;
+            if (gemini[nameof(GeminiOptions.TimeoutSeconds)] is { } timeout)
+            {
+                int.TryParse(timeout, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds);
+                options.TimeoutSeconds = seconds;
+            }
+        });
+        services.AddSingleton(provider => new GeminiChatClientFactory(
+            provider.GetRequiredService<IOptions<GeminiOptions>>(),
+            new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            }));
+        services.AddSingleton<IAiModel>(provider => new GeminiAiModel(
+            provider.GetRequiredService<IOptions<GeminiOptions>>(),
+            provider.GetRequiredService<GeminiChatClientFactory>().GetClient));
+
         var section = configuration.GetSection(TelegramOptions.SectionName);
 
         services.AddOptions<TelegramOptions>()
