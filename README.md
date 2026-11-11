@@ -122,8 +122,8 @@ Não iniciar a API de teste apontando para a origem: o consumidor da inbox escre
 | --- | --- |
 | clientes | Cadastro e busca da #25; telefone brasileiro canônico obrigatório e único; endereço principal opcional; resultados 0/1/N sem seleção ambígua. |
 | tipos_servico | Catálogo fixo da #24 com quatro IDs estáveis e duração/unidade/modalidade padrão; consulta somente leitura. |
-| agendamentos | Cliente e serviço obrigatórios; sem equipe; Versao >=1 como token EF; estado e endereço snapshot preservados. |
-| periodos_ocupacao | Relação 1:N com agendamento; intervalos UTC semiabertos; sem recálculo na migração. |
+| agendamentos | Cliente e serviço obrigatórios; sem equipe; criação #31 e consultas 0/1/N da #32; Versao >=1 como token EF; estado e endereço snapshot preservados. |
+| periodos_ocupacao | Relação 1:N; intervalos UTC semiabertos usados para programação e disponibilidade, inclusive serviços prolongados. |
 | registros_auditoria | Histórico com FK restritiva para agendamento. |
 | solicitacoes_pendentes / envios_telegram | Contexto e histórico técnico preservados. |
 | telegram_updates_inbox / telegram_business_operations | Recebimento durável, recuperação e idempotência; criações confirmadas mantêm vínculo com o Agendamento para reentrega. |
@@ -136,10 +136,10 @@ A migration incremental da #31 apenas adiciona o vínculo nullable da operação
 idempotente ao agendamento, sem reescrever operações técnicas anteriores.
 
 AgendaMutationExecutor integra a transação idempotente com advisory lock global.
-Os futuros callbacks devem reler estado, validar conflitos/confirmação e chamar
-IncrementarVersao(), inclusive ao modificar somente ocupações. Não há caso de uso
-de agendamento implementado por esse executor. A #30 implementa no Domain o motor
-determinístico de períodos; persistência e disponibilidade pertencem aos casos de uso posteriores.
+A #31 implementa a criação e a #32 consulta programação e disponibilidade sem
+efeitos de escrita. Futuros callbacks de edição devem reler estado, validar
+conflitos/confirmação e chamar IncrementarVersao(), inclusive ao modificar somente
+ocupações. A #30 permanece como motor determinístico de períodos no Domain.
 ### Integração contínua
 
 O fluxo do repositório é `feature/*` → `dev` → `main`. As tarefas entram em `dev` por Pull Request. A `main` recebe versões após homologação.

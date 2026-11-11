@@ -110,6 +110,9 @@ Componentes existentes:
 - `ITelegramInboxProcessingStore`
 - `IClientes` / `ClientesApplication`
 - `ICriacaoAgendamento` / `CriacaoAgendamentoApplication`
+- `IConsultaAgenda` / `ConsultaAgendaApplication`
+- `IDisponibilidadeAgenda` / `DisponibilidadeAgendaApplication`
+- `FormatadorAgenda`
 
 A camada Application pode depender de Domain.
 
@@ -174,6 +177,7 @@ Componentes existentes:
 - `Persistence/PostgresTipoServicoCatalogo.cs`
 - `Persistence/PostgresClienteStore.cs`
 - `Persistence/PostgresAgendaCriacaoStore.cs`
+- `Persistence/PostgresConsultaAgendaStore.cs`
 - `Telegram/TelegramInboxBackgroundService.cs`
 - `Telegram/TelegramInboxConsumer.cs`
 - `DependencyInjection.cs`
@@ -448,9 +452,10 @@ A #30 implementa o motor determinístico no Domain, com jornada fixa 08h–18h
 todos os dias em America/Sao_Paulo e geração de janelas em minutos/dias corridos.
 As verificações da migration apenas recusam legado incompatível, sem recalcular ocupações.
 A #31 implementa criação com disponibilidade, transação, lock e idempotência.
-Os casos de uso #32/#33/#35 e as tools ainda precisam integrar consultas,
-edições, estados, autorização conversacional e confirmações; não são entregues
-pela criação.
+A #32 implementa consultas 0/1/N, filtros combinados, disponibilidade e
+formatação textual sem efeitos de escrita. Os casos de uso #33/#35 e as tools
+ainda precisam integrar edições, estados, autorização conversacional e
+confirmações.
 ## 8. Idempotência e recuperação
 
 O recebimento utiliza `update_id` para identificar
@@ -485,10 +490,15 @@ garantia absoluta de execução exatamente uma vez.
 
 ## 9. Consultas e respostas sob demanda
 
-O MVP mantém consultas textuais da agenda e o envio normal de respostas
-no privado da administradora. A #47 formata os resultados; #18/#51 tratam
-transporte, persistência e recuperação dos envios, sem depender de um
-agendador de resumos. Falha de sendMessage não pode ser relatada como entrega.
+`ConsultaAgendaApplication` interpreta datas em America/Sao_Paulo e consulta os
+períodos efetivos em UTC, portanto serviços iniciados antes do intervalo aparecem
+nos dias em que ocupam a agenda. `PostgresConsultaAgendaStore` usa consultas sem
+tracking, limites e ordenação determinística. `DisponibilidadeAgendaApplication`
+reutiliza o motor da #30 e considera somente agendamentos Agendados.
+
+`FormatadorAgenda` produz texto simples por dia/período e inclui IDs para futura
+desambiguação. O envio privado continua responsabilidade de #18/#51 e da Tool de
+#44; a #32 não integra Telegram, MAF ou Gemini.
 
 O resumo automático às 07h50 (#50) foi retirado em 11/11/2026. Não haverá
 serviço de resumo ou controle de execução desse job no MVP. O BackgroundService
