@@ -286,10 +286,15 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<long?>("AgendamentoId")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTimeOffset>("ExecutadoEmUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("UpdateId", "OperationKey");
+
+                    b.HasIndex("AgendamentoId");
 
                     b.ToTable("telegram_business_operations", (string)null);
                 });
@@ -467,6 +472,11 @@ namespace Ian.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Ian.Domain.Entities.TelegramBusinessOperation", b =>
                 {
+                    b.HasOne("Ian.Domain.Entities.Agendamento", null)
+                        .WithMany()
+                        .HasForeignKey("AgendamentoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Ian.Domain.Entities.TelegramUpdateInbox", null)
                         .WithMany()
                         .HasForeignKey("UpdateId")

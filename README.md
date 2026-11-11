@@ -126,12 +126,14 @@ Não iniciar a API de teste apontando para a origem: o consumidor da inbox escre
 | periodos_ocupacao | Relação 1:N com agendamento; intervalos UTC semiabertos; sem recálculo na migração. |
 | registros_auditoria | Histórico com FK restritiva para agendamento. |
 | solicitacoes_pendentes / envios_telegram | Contexto e histórico técnico preservados. |
-| telegram_updates_inbox / telegram_business_operations | Recebimento durável, recuperação e idempotência preservados. |
+| telegram_updates_inbox / telegram_business_operations | Recebimento durável, recuperação e idempotência; criações confirmadas mantêm vínculo com o Agendamento para reentrega. |
 
 As novas migrations PrepararAgendaUnica e ConsolidarAgendaUnica movem equipes,
 exceções e bloqueios para legado_mvp, preservando PKs, FKs, dados e sequences.
 Um snapshot de preparação e o mapa AgendamentoId→EquipeId mantêm rastreabilidade.
 As quatro migrations anteriores permanecem intactas; não há DropTable no upgrade.
+A migration incremental da #31 apenas adiciona o vínculo nullable da operação
+idempotente ao agendamento, sem reescrever operações técnicas anteriores.
 
 AgendaMutationExecutor integra a transação idempotente com advisory lock global.
 Os futuros callbacks devem reler estado, validar conflitos/confirmação e chamar
@@ -189,7 +191,12 @@ O `TelegramBusinessOperationExecutor` implementa uma barreira transacional com c
 
 O registro da chave e a alteração de negócio devem ocorrer na mesma transação PostgreSQL.
 
-Para criação de agendamentos, a chave estável prevista é `agendamento:create`. Os futuros handlers administrativos devem executar suas escritas por meio desse executor.
+Para criação de agendamentos, a chave estável implementada é `agendamento:create`.
+`CriacaoAgendamentoApplication` executa cliente novo, agendamento, períodos e o
+vínculo da operação na mesma transação protegida pelo advisory lock. Em uma
+reentrega, o vínculo recupera o mesmo ID confirmado sem repetir a escrita.
+Os futuros handlers administrativos devem invocar esse caso de uso, sem acessar
+o `IanDbContext` diretamente.
 
 Essa abordagem impede repetir a mesma operação de banco para o mesmo update e chave.
 

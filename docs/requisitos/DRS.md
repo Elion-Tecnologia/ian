@@ -118,7 +118,7 @@ não existe CRUD livre do catálogo.
 | RF-004 | Consultar por período, cliente, serviço e estado, combinando filtros; sem filtro de equipe. |
 | RF-010 | Interpretar linguagem natural textual, coletar dados ausentes e chamar Tools autorizadas. |
 | RF-011 / RF-012 | Receber comandos e responder exclusivamente em texto no privado autorizado. |
-| RF-013 / RF-014 | Cadastrar e localizar clientes por telefone normalizado único; a #31 criará cliente/primeiro agendamento atomicamente. |
+| RF-013 / RF-014 | Cadastrar e localizar clientes por telefone normalizado único; a #31 cria cliente/primeiro agendamento atomicamente. |
 | RF-015 / RF-016 | Manter endereço principal opcional; edição cadastral não faz parte da #25 nem do MVP simplificado atual. |
 | RF-017 / RF-018 | Editar modalidade/dados de Agendado, validando impacto e preservando auditoria. |
 
@@ -221,7 +221,7 @@ como requisito ativo.
 | Componente | Proposta final do MVP | Estado do código nesta entrega |
 | --- | --- | --- |
 | Cliente / TipoServico | Preservar cadastro, unicidade e catálogo | Cadastro/localização de cliente implementados na #25, com concorrência pela constraint única; catálogo fixo sem CRUD, seed e consulta read-only implementados na #24. |
-| Agendamento | Sem EquipeId; campos abaixo | Sem EquipeId; Versao >=1 como token EF, incremento explícito por mutação. |
+| Agendamento | Sem EquipeId; campos abaixo | Sem EquipeId; criação transacional implementada na #31; Versao >=1 como token EF. |
 | PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Entidade persistente preservada; motor puro de geração e sobreposição implementado na #30. |
 | BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Sem entidade/DbSet ativo; tabela original movida para legado_mvp pela consolidação. |
 | Equipe / ExcecaoExpediente | Fora do modelo ativo; preservar dados legados | Fora do EF ativo; registros, IDs, FKs e sequences preservados em legado_mvp. |
@@ -242,8 +242,10 @@ Ver [plano de migração](../planejamento/migracao-agenda-unica.md).
 
 A #79 entrega persistência, arquivo legado e mecanismos básicos de concorrência.
 A #30 implementa o motor de períodos e os testes funcionais de 1/7 dias e minutos.
-#31–#33/#35 devem integrar disponibilidade, versões, confirmações e mutações.
-Testes de callbacks sintéticos não comprovam os casos de uso completos.
+A #31 integra a criação, disponibilidade, cliente novo, períodos, lock global e
+barreira idempotente. #32/#33/#35 permanecem responsáveis pelas demais consultas
+e mutações. Testes de callbacks sintéticos da #79 não substituem os testes do
+caso de uso real adicionados na #31.
 
 ## 8. Critérios de aceite e testes
 

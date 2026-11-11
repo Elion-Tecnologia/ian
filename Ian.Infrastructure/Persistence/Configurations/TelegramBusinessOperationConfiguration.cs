@@ -29,5 +29,10 @@ internal sealed class TelegramBusinessOperationConfiguration
             .WithMany()
             .HasForeignKey(operation => operation.UpdateId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Agendamento>()
+            .WithMany()
+            .HasForeignKey(operation => operation.AgendamentoId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

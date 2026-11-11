@@ -1,3 +1,4 @@
+using Ian.Application.Agenda;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -5,10 +6,25 @@ namespace Ian.Infrastructure.Persistence;
 
 /// <summary>
 /// Infrastructure boundary, not a scheduling use case. The callback must load current
-/// state after the lock, validate conflicts/confirmation, increment Versao and write audit.
+/// state after the lock, validate the operation and stage all related mutations atomically.
 /// </summary>
 public sealed class AgendaMutationExecutor(TelegramBusinessOperationExecutor operations)
+    : IAgendaMutationExecutor
 {
+    public Task<bool> ExecuteOnceAsync(
+        long updateId,
+        string operationKey,
+        Func<CancellationToken, Task> mutation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+        return ExecuteOnceAsync(
+            updateId,
+            operationKey,
+            (_, token) => mutation(token),
+            cancellationToken);
+    }
+
     public async Task<bool> ExecuteOnceAsync(
         long updateId,
         string operationKey,
@@ -34,9 +50,3 @@ public sealed class AgendaMutationExecutor(TelegramBusinessOperationExecutor ope
         }
     }
 }
-
-public sealed class AgendaVersionConflictException()
-    : Exception("O agendamento foi alterado. Releia os dados e revalide a operação.");
-
-public sealed class AgendaLockUnavailableException()
-    : Exception("A agenda está ocupada. A operação não foi confirmada.");
