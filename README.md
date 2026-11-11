@@ -87,12 +87,9 @@ Os endereços HTTP/HTTPS disponíveis aparecem no terminal. O console registra s
 
 ### Fluxo de desenvolvimento
 
-1. Selecionar uma Issue disponível.
-2. Criar uma branch `feature/*` a partir de `dev`.
-3. Implementar a funcionalidade seguindo o escopo e os critérios de aceite.
-4. Executar o build e os testes relevantes.
-5. Abrir um Pull Request para `dev`.
-6. Revisar e integrar as alterações após aprovação.
+Issue → `feature/*` a partir de `dev` → implementação → testes automatizados pertinentes → build → commit → push → Pull Request para `dev` → checks obrigatórios do GitHub → squash merge → fechamento da issue.
+
+Uma solicitação explícita para executar uma issue completa autoriza commit, push, Pull Request e squash merge, sem aprovações intermediárias, respeitadas as permissões do ambiente. Não faça merge enquanto testes falharem ou checks obrigatórios estiverem pendentes ou reprovados. Investigue somente os arquivos relevantes e evite auditorias ou code reviews separados.
 
 ### 5. PostgreSQL, migrations e segurança dos testes
 
@@ -142,9 +139,9 @@ conflitos/confirmação e chamar IncrementarVersao(), inclusive ao modificar som
 ocupações. A #30 permanece como motor determinístico de períodos no Domain.
 ### Integração contínua
 
-O fluxo do repositório é `feature/*` → `dev` → `main`. As tarefas entram em `dev` por Pull Request. A `main` recebe versões após homologação.
+O fluxo do repositório é Issue → `feature/*` criada a partir de `dev` → Pull Request para `dev` → checks obrigatórios aprovados → squash merge e fechamento da issue. A `main` recebe versões após homologação.
 
-O GitHub Actions executa restore, build e testes em PRs para `dev` e em pushes nessa branch. Antes de integrar uma PR, confira se o check **Build and test** passou. O relatório `.trx` fica no artefato `ian-test-results` da execução.
+O GitHub Actions executa restore, build e testes em PRs para `dev` e em pushes nessa branch. Faça squash merge somente após todos os checks obrigatórios passarem. O relatório `.trx` fica no artefato `ian-test-results` da execução.
 
 Para reproduzir a verificação localmente, execute da raiz da solução:
 
