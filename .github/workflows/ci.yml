@@ -15,6 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ian_t22_tests
+          POSTGRES_USER: ian_test
+          POSTGRES_PASSWORD: ian_test_local
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ian_test -d ian_t22_tests"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -40,6 +55,20 @@ jobs:
           --no-build
           --no-restore
           --logger "trx;LogFilePrefix=ian-tests"
+          --results-directory "${{ runner.temp }}/ian-test-results"
+
+      - name: Test conversation and confirmation persistence
+        id: persistence-tests
+        env:
+          IAN_TEST_POSTGRES_DATABASE: ian_t22_tests
+          IAN_TEST_POSTGRES_CONNECTION_STRING: Host=127.0.0.1;Database=ian_t22_tests;Username=ian_test;Password=ian_test_local
+        run: >-
+          dotnet test Ian.Tests/Ian.Tests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --filter "FullyQualifiedName~OperationConfirmationPostgresTests|FullyQualifiedName~PendingConversationPostgresTests"
+          --logger "trx;LogFilePrefix=ian-persistence-tests"
           --results-directory "${{ runner.temp }}/ian-test-results"
 
       - name: Upload test report

@@ -33,7 +33,7 @@ public sealed record AgentToolResult
     public static AgentToolResult Missing(string message) => new(AgentToolOutcome.MissingData, message);
     public static AgentToolResult Ambiguity(string message, object? data = null) => new(AgentToolOutcome.Ambiguous, message, data);
     public static AgentToolResult ConflictResult(string message) => new(AgentToolOutcome.Conflict, message);
-    public static AgentToolResult RequiresConfirmation(string message) => new(AgentToolOutcome.ConfirmationRequired, message);
+    public static AgentToolResult RequiresConfirmation(string message, object? data = null) => new(AgentToolOutcome.ConfirmationRequired, message, data);
     public static AgentToolResult Failed(string message) => new(AgentToolOutcome.Error, message);
 }
 

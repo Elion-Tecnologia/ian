@@ -39,8 +39,13 @@ public sealed class PendingConversationPostgresTests
             Assert.Equal(new[] { "telefone", "data" }, recovered.MissingFields);
 
             // A read used by an interleaved consultation leaves the mutation pending.
-            Assert.Equal(recovered, await restartedService.GetForTurnAsync(userId, now.AddMinutes(2)));
-            Assert.Equal(PendingIntentUpdateStatus.Updated, await restartedService.CancelAsync(userId, now.AddMinutes(2)));
+            var afterConsultation = await restartedService.GetForTurnAsync(userId, now.AddMinutes(2));
+            Assert.NotNull(afterConsultation);
+            Assert.Equal(recovered.Id, afterConsultation.Id);
+            Assert.Equal(recovered.CollectedFields, afterConsultation.CollectedFields);
+            Assert.Equal(recovered.MissingFields, afterConsultation.MissingFields);
+            Assert.Equal(recovered.ExpiresAtUtc, afterConsultation.ExpiresAtUtc);
+            Assert.Equal(PendingIntentUpdateStatus.Cancelled, await restartedService.CancelAsync(userId, now.AddMinutes(2)));
         }
     }
 

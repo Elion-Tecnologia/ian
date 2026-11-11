@@ -149,6 +149,18 @@ após 30 minutos. O conteúdo original da conversa e prompts não são persistid
 Na migration inicial, pendências placeholder sem campos recuperáveis são marcadas
 Expirada, mantendo seus registros históricos.
 
+A #22 acrescenta `IOperationConfirmation`: apenas cancelamento exige desafio
+persistido com ID aleatório, ator, alvo, argumentos, versão e validade de até
+cinco minutos, limitada à expiração da solicitação. A aceitação explícita deve
+ser vinculada ao desafio pela orquestração confiável; um texto "sim" isolado ou
+um argumento produzido pelo modelo não autoriza a escrita. Novo desafio,
+atualização/seleção do contexto, substituição ou cancelamento invalidam o anterior.
+O backend relê alvo/versão/estado sob o lock da agenda e consome a confirmação
+na mesma transação do callback autorizado. Falhas revertem a mutação e o consumo.
+O callback deve revalidar regras/disponibilidade, incrementar a versão e manter
+histórico/auditoria; sua implementação funcional pertence à #35 e a integração
+textual às Tools à #44.
+
 Componentes de agenda puros em `Ian.Domain/Agenda/`:
 
 - `CalculadoraOcupacao`: gera janelas em UTC para Minutos e DiasCorridos.
