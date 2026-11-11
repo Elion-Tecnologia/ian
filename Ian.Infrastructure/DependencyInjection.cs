@@ -40,6 +40,9 @@ public static class DependencyInjection
         services.AddSingleton<IAiModel>(provider => new GeminiAiModel(
             provider.GetRequiredService<IOptions<GeminiOptions>>(),
             provider.GetRequiredService<GeminiChatClientFactory>().GetClient));
+        services.AddScoped<IAgentToolBackend, AgentToolBackend>();
+        services.AddScoped<AgentExecutionBudget>();
+        services.AddScoped<IAgentToolRegistry, AgentToolRegistry>();
 
         var section = configuration.GetSection(TelegramOptions.SectionName);
 

@@ -382,8 +382,22 @@ O agente não deve:
 
 ### 6.3 Ferramentas do agente
 
-As futuras ferramentas devem invocar operações
-controladas pela aplicação.
+`IAgentToolRegistry` em Infrastructure publica cinco funções MAF com argumentos
+tipados para cadastro de cliente, consulta de agenda, disponibilidade, criação e
+alteração de agendamento. Os resultados usam os estados `Success`, `MissingData`,
+`Ambiguous`, `Conflict`, `ConfirmationRequired` e `Error`. Argumentos incompletos
+ou inválidos e chamadas fora do chat privado da administradora falham antes do
+backend. Cada execução limita chamadas de Tools a 8, cada chamada a 15 segundos,
+resultados a 8.000 caracteres; a política do agente limita turnos a 6 e prompts
+a 16.000 caracteres.
+
+O registro não habilita por si só Function Calling no fluxo de conversa. A
+integração efetiva das Tools com os casos de uso autorizados pertence à #44;
+até lá, o backend padrão retorna `Error` sem executar negócio, persistência ou
+chamada Gemini. `IAiModel` e `GeminiAiModel` continuam sem ferramentas registradas.
+
+A instrução do agente limita o modelo às capacidades publicadas e proíbe
+declarar sucesso sem um resultado `Success`.
 
 A autorização, a consistência dos dados,
 as transações e as regras de disponibilidade
