@@ -73,14 +73,11 @@ public static class DependencyInjection
             PostgresTelegramInboxProcessingStore>();
 
         services.AddScoped<TelegramBusinessOperationExecutor>();
+        services.AddScoped<AgendaMutationExecutor>();
 
         services.AddScoped<DeferredTelegramHandlers>();
 
         services.AddScoped<ITelegramAuthorizedUpdateHandler>(
-            provider =>
-                provider.GetRequiredService<DeferredTelegramHandlers>());
-
-        services.AddScoped<ITelegramGroupEventHandler>(
             provider =>
                 provider.GetRequiredService<DeferredTelegramHandlers>());
 

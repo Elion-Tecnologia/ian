@@ -3,8 +3,7 @@ using System.Text.Json;
 namespace Ian.Application.Telegram;
 
 public sealed class TelegramUpdateDispatcher(
-    ITelegramAuthorizedUpdateHandler authorizedHandler,
-    ITelegramGroupEventHandler groupEventHandler)
+    ITelegramAuthorizedUpdateHandler authorizedHandler)
 {
     public async Task<TelegramAuthorizationDecision> DispatchAsync(
         TelegramInboxUpdate update,
@@ -41,16 +40,6 @@ public sealed class TelegramUpdateDispatcher(
                     break;
 
                 case TelegramAuthorizationDecision.NonCommandEvent:
-                    if (TelegramUpdateAuthorization.TryGetGroupCandidate(
-                            root, out var candidate) &&
-                        candidate is not null)
-                    {
-                        await groupEventHandler.HandleCandidateAsync(
-                            candidate,
-                            cancellationToken);
-                    }
-                    break;
-
                 case TelegramAuthorizationDecision.Denied:
                     break;
 

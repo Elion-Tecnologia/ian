@@ -20,16 +20,6 @@ internal sealed class ClienteConfiguration : IEntityTypeConfiguration<Cliente>
     }
 }
 
-internal sealed class EquipeConfiguration : IEntityTypeConfiguration<Equipe>
-{
-    public void Configure(EntityTypeBuilder<Equipe> builder)
-    {
-        builder.ToTable("equipes");
-        builder.HasKey(equipe => equipe.Id);
-        builder.Property(equipe => equipe.Nome).IsRequired();
-    }
-}
-
 internal sealed class TipoServicoConfiguration : IEntityTypeConfiguration<TipoServico>
 {
     public void Configure(EntityTypeBuilder<TipoServico> builder)

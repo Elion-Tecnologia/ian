@@ -6,7 +6,3 @@ public enum TelegramAuthorizationDecision
     Denied,
     NonCommandEvent
 }
-
-public sealed record TelegramGroupEventCandidate(
-    long UpdateId,
-    long ChatId);

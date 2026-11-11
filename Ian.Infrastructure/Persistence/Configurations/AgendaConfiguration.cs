@@ -10,6 +10,7 @@ internal sealed class AgendamentoConfiguration : IEntityTypeConfiguration<Agenda
     {
         builder.ToTable("agendamentos", table =>
         {
+            table.HasCheckConstraint("ck_agendamentos_versao", "\"Versao\" >= 1");
             table.HasCheckConstraint(
                 "ck_agendamentos_periodo",
                 """ "InicioPrevistoUtc" < "FimPrevistoUtc" """);
@@ -39,6 +40,9 @@ internal sealed class AgendamentoConfiguration : IEntityTypeConfiguration<Agenda
         });
 
         builder.HasKey(agendamento => agendamento.Id);
+        builder.Property(agendamento => agendamento.Versao)
+            .HasDefaultValue(1L)
+            .IsConcurrencyToken();
 
         builder.Property(agendamento => agendamento.Modalidade)
             .HasConversion<string>()
@@ -57,17 +61,12 @@ internal sealed class AgendamentoConfiguration : IEntityTypeConfiguration<Agenda
             .HasForeignKey(agendamento => agendamento.ClienteId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne<Equipe>()
-            .WithMany()
-            .HasForeignKey(agendamento => agendamento.EquipeId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasOne<TipoServico>()
             .WithMany()
             .HasForeignKey(agendamento => agendamento.TipoServicoId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(agendamento => new { agendamento.EquipeId, agendamento.Estado });
+        builder.HasIndex(agendamento => new { agendamento.Estado, agendamento.InicioPrevistoUtc });
     }
 }
 
@@ -88,51 +87,5 @@ internal sealed class PeriodoOcupacaoConfiguration : IEntityTypeConfiguration<Pe
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(periodo => new { periodo.AgendamentoId, periodo.InicioUtc });
-    }
-}
-
-internal sealed class ExcecaoExpedienteConfiguration : IEntityTypeConfiguration<ExcecaoExpediente>
-{
-    public void Configure(EntityTypeBuilder<ExcecaoExpediente> builder)
-    {
-        builder.ToTable("excecoes_expediente", table =>
-            table.HasCheckConstraint(
-                "ck_excecoes_expediente_jornada",
-                """
-                ("FolgaIntegral" AND "InicioLocal" IS NULL AND "FimLocal" IS NULL)
-                OR
-                (NOT "FolgaIntegral" AND "InicioLocal" IS NOT NULL AND "FimLocal" IS NOT NULL
-                 AND "InicioLocal" < "FimLocal")
-                """));
-
-        builder.HasKey(excecao => excecao.Id);
-
-        builder.HasOne<Equipe>()
-            .WithMany()
-            .HasForeignKey(excecao => excecao.EquipeId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasIndex(excecao => new { excecao.EquipeId, excecao.DataLocal })
-            .IsUnique();
-    }
-}
-
-internal sealed class BloqueioAgendaConfiguration : IEntityTypeConfiguration<BloqueioAgenda>
-{
-    public void Configure(EntityTypeBuilder<BloqueioAgenda> builder)
-    {
-        builder.ToTable("bloqueios_agenda", table =>
-            table.HasCheckConstraint(
-                "ck_bloqueios_agenda_intervalo",
-                """ "InicioUtc" < "FimUtc" """));
-
-        builder.HasKey(bloqueio => bloqueio.Id);
-
-        builder.HasOne<Equipe>()
-            .WithMany()
-            .HasForeignKey(bloqueio => bloqueio.EquipeId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasIndex(bloqueio => new { bloqueio.EquipeId, bloqueio.InicioUtc });
     }
 }

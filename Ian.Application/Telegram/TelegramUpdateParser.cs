@@ -57,32 +57,6 @@ public static class TelegramUpdateParser
                 "mime_type",
                 "file_name");
 
-            CopyObject(
-                message,
-                minimalMessage,
-                "left_chat_member",
-                "id",
-                "is_bot");
-
-            if (message.TryGetProperty(
-                    "new_chat_members",
-                    out var members) &&
-                members.ValueKind == JsonValueKind.Array)
-            {
-                var minimalMembers = new JsonArray();
-
-                foreach (var member in members.EnumerateArray())
-                {
-                    if (member.ValueKind == JsonValueKind.Object)
-                    {
-                        minimalMembers.Add(
-                            Project(member, "id", "is_bot"));
-                    }
-                }
-
-                minimalMessage["new_chat_members"] = minimalMembers;
-            }
-
             minimalPayload["message"] = minimalMessage;
         }
 

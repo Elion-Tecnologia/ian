@@ -39,9 +39,6 @@ namespace Ian.Infrastructure.Persistence.Migrations
                     b.Property<string>("EnderecoSnapshot")
                         .HasColumnType("text");
 
-                    b.Property<long>("EquipeId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("Estado")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -69,13 +66,19 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
+                    b.Property<long>("Versao")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClienteId");
 
                     b.HasIndex("TipoServicoId");
 
-                    b.HasIndex("EquipeId", "Estado");
+                    b.HasIndex("Estado", "InicioPrevistoUtc");
 
                     b.ToTable("agendamentos", null, t =>
                         {
@@ -90,33 +93,8 @@ namespace Ian.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_agendamentos_periodo", " \"InicioPrevistoUtc\" < \"FimPrevistoUtc\" ");
 
                             t.HasCheckConstraint("ck_agendamentos_unidade", " \"UnidadeDuracao\" IN ('Minutos', 'DiasCorridos') ");
-                        });
-                });
 
-            modelBuilder.Entity("Ian.Domain.Entities.BloqueioAgenda", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<long?>("EquipeId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTimeOffset>("FimUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("InicioUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EquipeId", "InicioUtc");
-
-                    b.ToTable("bloqueios_agenda", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_bloqueios_agenda_intervalo", " \"InicioUtc\" < \"FimUtc\" ");
+                            t.HasCheckConstraint("ck_agendamentos_versao", "\"Versao\" >= 1");
                         });
                 });
 
@@ -192,63 +170,6 @@ namespace Ian.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_envios_telegram_estado", " \"Estado\" IN ('Pendente', 'Enviado', 'Falhou') ");
 
                             t.HasCheckConstraint("ck_envios_telegram_tentativas", " \"Tentativas\" >= 0 ");
-                        });
-                });
-
-            modelBuilder.Entity("Ian.Domain.Entities.Equipe", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<bool>("Ativa")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Nome")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<long?>("TelegramChatId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("equipes", (string)null);
-                });
-
-            modelBuilder.Entity("Ian.Domain.Entities.ExcecaoExpediente", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateOnly>("DataLocal")
-                        .HasColumnType("date");
-
-                    b.Property<long>("EquipeId")
-                        .HasColumnType("bigint");
-
-                    b.Property<TimeOnly?>("FimLocal")
-                        .HasColumnType("time without time zone");
-
-                    b.Property<bool>("FolgaIntegral")
-                        .HasColumnType("boolean");
-
-                    b.Property<TimeOnly?>("InicioLocal")
-                        .HasColumnType("time without time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EquipeId", "DataLocal")
-                        .IsUnique();
-
-                    b.ToTable("excecoes_expediente", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_excecoes_expediente_jornada", "(\"FolgaIntegral\" AND \"InicioLocal\" IS NULL AND \"FimLocal\" IS NULL)\r\nOR\r\n(NOT \"FolgaIntegral\" AND \"InicioLocal\" IS NOT NULL AND \"FimLocal\" IS NOT NULL\r\n AND \"InicioLocal\" < \"FimLocal\")");
                         });
                 });
 
@@ -483,32 +404,9 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Ian.Domain.Entities.Equipe", null)
-                        .WithMany()
-                        .HasForeignKey("EquipeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("Ian.Domain.Entities.TipoServico", null)
                         .WithMany()
                         .HasForeignKey("TipoServicoId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Ian.Domain.Entities.BloqueioAgenda", b =>
-                {
-                    b.HasOne("Ian.Domain.Entities.Equipe", null)
-                        .WithMany()
-                        .HasForeignKey("EquipeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("Ian.Domain.Entities.ExcecaoExpediente", b =>
-                {
-                    b.HasOne("Ian.Domain.Entities.Equipe", null)
-                        .WithMany()
-                        .HasForeignKey("EquipeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
