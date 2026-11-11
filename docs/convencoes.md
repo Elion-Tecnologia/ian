@@ -365,6 +365,10 @@ Conversões devem ocorrer de maneira explícita.
 Cálculos de serviços prolongados devem respeitar
 os dias locais de execução e o expediente fixo do MVP (08h–18h, todos os dias).
 
+DiasCorridos reserva janelas completas 08h–18h em cada data, inclusive
+a primeira. Horário diferente exige esclarecimento; não assumir início
+parcial. A unidade Minutos mantém sua semântica de consumo de expediente.
+
 Não converter períodos de vários dias em uma
 reserva contínua de 24 horas por dia.
 
@@ -549,7 +553,8 @@ Priorizar cobertura para:
 - Recuperação após interrupções.
 - Concorrência entre agendamentos.
 - Cálculo de períodos de ocupação.
-- Bloqueios e exceções de expediente.
+- Janelas completas nos serviços em dias corridos e esclarecimento de horário divergente.
+- Preservação de dados legados na migração, inclusive bloqueios e exceções retirados do modelo ativo.
 - Transições de estado.
 - Confirmações obrigatórias.
 

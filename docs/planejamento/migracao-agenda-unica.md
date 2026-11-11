@@ -1,14 +1,17 @@
 # Agenda única — proposta de modelo e migração incremental
 
-**Decisão funcional:** aprovada em 10/11/2026.
+**Decisão funcional:** aprovada em 10/11/2026, revisada em 11/11/2026.
 **Implementação física:** proposta para revisão; nenhuma migration gerada ou executada.
 **Issue:** #79. **Base inspecionada:** origin/dev, 207be7a.
 **Entrega atual:** #78 remove apenas suporte técnico de mídia; Domain, EF e migrations permanecem intactos.
 
 ## 1. Resultado pretendido
 
-Uma agenda para a administradora, sem equipe, grupo, folga ou jornada
-excepcional. Manter clientes, serviços, compromissos, estados, confirmação,
+Uma agenda para a administradora, com criar, consultar, editar, reagendar,
+concluir e cancelar. Equipes, grupos, folgas, jornadas excepcionais, bloqueios
+administrativos, resumo automático, reabertura e prorrogação manual ficam
+fora do MVP. Consultas sob demanda e respostas normais permanecem.
+Manter clientes, serviços, compromissos, estados, confirmação,
 idempotência, auditoria e todos os dados anteriores. Não criar uma equipe
 artificial nem uma tabela Agenda para esconder o modelo antigo.
 
@@ -42,22 +45,29 @@ concluir/cancelar libera reservas sem apagar o histórico de execução.
 
 Jornada fixa proposta: 08h–18h em America/Sao_Paulo, todos os dias, inclusive
 domingos. Minutos consomem jornada: 240 minutos a partir de 16h reservam
-16h–18h e 08h–10h do dia seguinte. DiasCorridos contam datas consecutivas:
-sete dias iniciados segunda às 10h reservam segunda 10h–18h e mais seis
-janelas 08h–18h, terminando domingo às 18h. Um dia iniciado às 10h termina
-às 18h dessa data. Data inicial parcial conta como dia 1; sem compensação
-por folgas, fins de semana, bloqueios ou atraso. Início fora de [08h,18h)
-é recusado. Não transformar a duração em reserva contínua de 24 horas.
+16h–18h e 08h–10h do dia seguinte; o início em Minutos deve estar em
+[08h,18h). DiasCorridos reserva 08h–18h em cada data consecutiva, inclusive
+a primeira e os domingos. Sete dias a partir de segunda são sete janelas
+completas de segunda a domingo. Um dia ocupa 08h–18h na data informada.
+Horário indicado diferente de 08h exige esclarecimento antes de gerar
+qualquer reserva, sem assumir primeira data parcial ou corrigir o pedido
+silenciosamente. Não transformar a duração em reserva contínua de 24 horas.
 
 O cálculo ainda não existe em Domain/Application; #30 o implementará.
 Dados já calculados sob regras antigas não serão recalculados pela migration.
 Agendados incompatíveis exigem reconciliação aprovada antes da ativação;
 Concluídos/Cancelados mantêm sua representação histórica.
 
-BloqueioAgenda passa a ter Id, InicioUtc e FimUtc, sem EquipeId. Todo bloqueio
-afeta a agenda única. Bloqueios individuais antigos **não podem ser promovidos
-silenciosamente** a bloqueios globais. A administradora deve decidir como
-tratá-los; arquivar não significa cancelar automaticamente reservas.
+BloqueioAgenda será retirada integralmente do modelo ativo somente na #79,
+com todos os registros, intervalos e relações históricas preservados em
+legado_mvp. Não haverá bloqueio global ou individual no novo MVP. Antes
+de desativar efeitos legados, inventariar seu impacto e obter decisões
+explícitas; arquivar não autoriza apagar dados ou remanejar reservas.
+
+Períodos legados com primeiro dia parcial ou duração calculada por exceções
+não serão ampliados/recalculados automaticamente para janelas completas.
+Preservar os originais e auditar a reconciliação dos Agendados conflitantes
+com a nova regra, incluindo possíveis sobreposições entre antigas equipes.
 
 ## 2. Inventário de código e esquema afetados
 
@@ -66,14 +76,14 @@ tratá-los; arquivar não significa cancelar automaticamente reservas.
 | Domain/Entities/Agendamento.cs | Retirar EquipeId e adicionar Versao. |
 | Domain/Entities/Equipe.cs | Retirar do modelo ativo após preservação dos registros e vínculos. |
 | Domain/Entities/ExcecaoExpediente.cs | Retirar do modelo ativo; preservar calendário e folgas legadas. |
-| Domain/Entities/BloqueioAgenda.cs | Retirar EquipeId após decisão sobre cada escopo antigo. |
+| Domain/Entities/BloqueioAgenda.cs | Retirar do modelo ativo na #79 após preservar integralmente seus dados/relações legados. |
 | Domain/Entities/PeriodoOcupacao.cs | Manter campos e IDs; sem mudança de cardinalidade. |
-| Persistence/IanDbContext.cs | Retirar DbSets Equipes/ExcecoesExpediente; manter demais DbSets. |
+| Persistence/IanDbContext.cs | Retirar DbSets Equipes/ExcecoesExpediente/BloqueiosAgenda na #79; manter demais DbSets. |
 | Configurations/CadastrosConfiguration.cs | Retirar EquipeConfiguration; preservar Cliente/TipoServico. |
-| Configurations/AgendaConfiguration.cs | Adaptar Agendamento/Bloqueio; retirar ExcecaoExpedienteConfiguration; manter PeriodoOcupacao. |
+| Configurations/AgendaConfiguration.cs | Adaptar Agendamento; retirar BloqueioAgendaConfiguration e ExcecaoExpedienteConfiguration na #79; manter PeriodoOcupacao. |
 | Migrations/IanDbContextModelSnapshot.cs | Atualizar somente ao gerar novas migrations aprovadas. |
 | Contratos/handlers Telegram de grupos | Remover TryGetGroupCandidate, candidatos/handler e projeção de associação; revalidar grupo sempre não administrativo. |
-| Casos de uso/Tools futuros | Parâmetros sem EquipeId, lock global e versão; nenhuma Tool de grupo/equipe/exceção. |
+| Casos de uso/Tools futuros | Parâmetros sem EquipeId, lock global e versão; nenhuma Tool de grupo/equipe/exceção/bloqueio ou prorrogação. |
 
 Migrations existentes **preservadas sem edição**:
 
@@ -91,12 +101,12 @@ o legado já integrado, não deve ser reescrita para parecer agenda única.
 | --- | --- |
 | FK_agendamentos_equipes_EquipeId | Retirar após arquivar a correspondência agendamento/equipe. |
 | FK_excecoes_expediente_equipes_EquipeId | Preservar na área legada; sai do modelo ativo com as tabelas. |
-| FK_bloqueios_agenda_equipes_EquipeId | Retirar após arquivar/reconciliar o escopo antigo. |
+| FK_bloqueios_agenda_equipes_EquipeId | Preservar com a tabela e EquipeId na área legada; sem equivalente ativo. |
 | IX_agendamentos_EquipeId_Estado | Substituir por IX_agendamentos_Estado_InicioPrevistoUtc. |
 | IX_excecoes_expediente_EquipeId_DataLocal (único) | Preservar com tabela legada; sem novo equivalente ativo. |
-| IX_bloqueios_agenda_EquipeId_InicioUtc | Substituir por IX_bloqueios_agenda_InicioUtc. |
+| IX_bloqueios_agenda_EquipeId_InicioUtc | Preservar com a tabela legada; não criar índice de bloqueio global ativo. |
 | IX_periodos_ocupacao_AgendamentoId_InicioUtc | Preservar; avaliar adicional IX_periodos_ocupacao_InicioUtc_FimUtc para sobreposição. |
-| PKs de todas as entidades preservadas | Manter identidades/valores; mover equipes/exceções para arquivo legado, sem recriar IDs. |
+| PKs de todas as entidades preservadas | Manter identidades/valores; mover equipes/exceções/bloqueios para arquivo legado, sem recriar IDs. |
 | FKs Agendamento→Cliente/TipoServico, Periodo→Agendamento, Auditoria→Agendamento | Preservar integralmente, ON DELETE RESTRICT. |
 | Checks de duração, período, estado, modalidade, endereço e intervalo | Preservar; adicionar ck_agendamentos_versao (Versao >= 1). |
 | UNIQUE de telefone, índices de auditoria/solicitação/envio/inbox/operação idempotente | Sem alteração nesta migração. |
@@ -110,13 +120,13 @@ de exclusão nem garantem ausência de conflito por si sós.
 
 O esquema atual não impõe exclusão de períodos sobrepostos. Para o MVP,
 propor um único advisory lock de transação, com chave constante documentada,
-compartilhado por criar, editar, reagendar, cancelar, concluir, reabrir,
-prorrogar e criar/remover bloqueio. Dentro de uma transação READ COMMITTED:
+compartilhado por criar, editar, reagendar, cancelar e concluir.
+Dentro de uma transação READ COMMITTED:
 
 1. Validar autorização, chave idempotente e parâmetros iniciais.
 2. Adquirir o lock global antes de ler disponibilidade.
 3. Executar nova consulta após obter o lock, considerando ocupações de pais
-   Agendados, bloqueios, alvo/Versao e confirmação ainda válida.
+   Agendados, alvo/Versao e confirmação ainda válida.
 4. Persistir compromisso, ocupações, versão, auditoria e chave idempotente.
 5. Confirmar a transação; somente então responder sucesso. O lock é liberado
    pela conclusão da transação, inclusive no rollback/cancelamento.
@@ -145,6 +155,8 @@ Conferência deste ambiente em 10/11/2026, sem revelar valores de configuração
 - psql/pg_dump não encontrados no PATH; PostgreSQL Homebrew/Postgres.app e
   socket Docker padrão não identificados.
 - Nenhuma conexão foi aberta e nenhum SQL foi executado no PostgreSQL.
+- Em 11/11/2026, o usuário confirmou que ainda não configurou os secrets.
+  A presença de dados em outros bancos continua desconhecida.
 
 **Não foi possível determinar se os bancos existentes contêm dados.** Isso
 não comprova ausência de banco remoto ou em outro computador. Inventário de
@@ -195,11 +207,13 @@ detalhes necessários à decisão ficam em canal privado controlado.
 
 ### A. PrepararAgendaUnica
 
-Após inventário e aprovação, ensaiar em cópia populada isolada. Gerar nova
+Após inventário, backup com restauração ensaiada e aprovação, trabalhar
+em cópia populada isolada. Gerar nova
 migration, sem tocar nas quatro anteriores, para adicionar Versao com default 1,
 check/token EF e índices globais úteis. Preparar área `legado_mvp` com manifesto
 de versão/data/contagens e cópias verificadas da relação AgendamentoId→EquipeId
-e do escopo BloqueioId→EquipeId. Acesso restrito e sem publicação de PII.
+e preservação integral dos bloqueios e de suas relações, incluindo
+BloqueioId→EquipeId. Acesso restrito e sem publicação de PII.
 Tabelas ativas e suas relações antigas permanecem funcionais nessa fase.
 
 Capturar também dependências fora do EF, pendências e envios legados. Não
@@ -215,9 +229,10 @@ uma base nova; registrar versões, contagens e integridade, com destino privado.
 roles e demais objetos globais exigem inventário próprio.
 
 Serviços simultâneos antes válidos em equipes diferentes passam a conflitar.
-Cada conflito, bloqueio individual, exceção aplicada e reserva fora da jornada
-fixa precisa de decisão explícita da administradora. Não escolher equipe,
-cancelar, mover, fundir bloqueios ou recalcular períodos silenciosamente.
+Cada conflito, bloqueio legado, exceção aplicada e reserva incompatível com
+as janelas completas de DiasCorridos precisa de decisão explícita da
+administradora antes da transição. Não escolher equipe, cancelar, mover,
+apagar bloqueios, ampliar o primeiro dia ou recalcular períodos silenciosamente.
 Mudanças corretivas serão operações auditadas próprias; história concluída ou
 cancelada não será reescrita para se ajustar às novas regras.
 
@@ -231,9 +246,9 @@ como legados bloqueados para revisão; não reenviá-los para o privado por infe
 Somente após conflitos ativos zerados/decididos, arquivo conferido e autorização:
 
 1. Gerar migration incremental de consolidação com SQL revisado na cópia.
-2. Remover FK/índice/coluna EquipeId de agendamentos e de bloqueios, preservando
-   os mapas correspondentes em legado_mvp. Aplicar índices globais restantes.
-3. Mover tabelas equipes e excecoes_expediente e suas dependências necessárias
+2. Remover FK/índice/coluna EquipeId de agendamentos, preservando o mapa
+   correspondente em legado_mvp. Aplicar índices globais de agendamentos.
+3. Mover tabelas equipes, excecoes_expediente e bloqueios_agenda e suas dependências necessárias
    para legado_mvp, preservando dados/PKs/FKs internas. Retirar os mapeamentos
    ativos; não emitir DropTable automático sem substituir pelo arquivamento
    revisado. Conferir schema de sequences/identidades e permissões.
@@ -265,8 +280,11 @@ Critérios para liberar #79:
   concluídos/cancelados, ocupações, exceções, bloqueios e auditoria.
 - Preflight aborta em conflito ou arquivo incompleto; IDs/FKs e contagens
   preservados após consolidação, inclusive histórico e inbox.
-- Casos de 240 minutos, 1/7 dias, início parcial e virada de mês/ano.
-- Duas conexões disputando reserva, reserva/bloqueio, edição e reabertura;
+- Casos de 240 minutos e 1/7 dias com todas as janelas 08h–18h, inclusive
+  a primeira; horário divergente exige esclarecimento sem reserva.
+- Preservação de períodos parciais legados, reconciliação explícita dos
+  Agendados e arquivamento integral de bloqueios sem recalcular o histórico.
+- Duas conexões disputando reserva, edição, reagendamento e cancelamento;
   uma vence e a outra revalida com a versão atual sem estado parcial.
 - Reentrega/restart/replay de confirmação não duplicam efeito.
 - Backup/restore e estratégia de retorno após escrita nova ensaiados em cópia.

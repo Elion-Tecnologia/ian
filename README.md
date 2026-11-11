@@ -5,7 +5,11 @@ Agente de inteligência artificial para gerenciar uma única agenda de uma loja 
 
 ## Objetivo
 
-Permitir que a administradora consulte e organize clientes, serviços, agendamentos e disponibilidade em uma agenda única. O MVP utiliza exclusivamente mensagens textuais privadas; equipes, grupos Telegram, jornadas excepcionais, folgas e dashboards estão fora do escopo.
+Permitir que a administradora consulte e organize clientes, serviços, agendamentos e disponibilidade em uma agenda única. O MVP utiliza exclusivamente mensagens textuais privadas; equipes, grupos Telegram, jornadas excepcionais, folgas, bloqueios administrativos, resumo automático, prorrogação manual, reabertura e dashboards estão fora do escopo.
+
+Serviços em dias corridos reservam 08h–18h em todas as datas, inclusive a primeira.
+Horário informado diferente de 08h exige esclarecimento, sem reserva parcial
+automática. Consultas sob demanda e respostas textuais normais permanecem.
 
 ## Tecnologias planejadas
 
@@ -157,7 +161,7 @@ de dados serão revisadas na #79 antes de qualquer execução. Consulte o
 | `agendamentos` | FKs obrigatórias para cliente, equipe e tipo de serviço. Período previsto em UTC e estados Agendado, Concluido ou Cancelado. Endereço preservado como snapshot, obrigatório para serviço externo. Índice por equipe e estado. |
 | `periodos_ocupacao` | Um agendamento pode ter vários períodos. Cada período tem início e fim em UTC, com índice por agendamento e início. |
 | `excecoes_expediente` | Uma exceção por equipe e data local. Representa uma folga integral ou uma janela de jornada no horário local. |
-| `bloqueios_agenda` | Intervalo em UTC. A FK de equipe é opcional e sua ausência representa um bloqueio geral. Índice por equipe e início. |
+| `bloqueios_agenda` | Legado fora do MVP: intervalo UTC e EquipeId opcional. Sua retirada do modelo ativo ocorrerá na #79, preservando dados e relações históricas. |
 | `solicitacoes_pendentes` | Operação, usuário do Telegram, estado, criação e expiração em UTC. Índice por usuário, estado e expiração. |
 | `registros_auditoria` | Operação, resultado, correlação e instante em UTC. Vínculo opcional com agendamento. Índices por correlação e por agendamento e instante. |
 | `envios_telegram` | Destino, tipo de mensagem, estado, tentativas e instantes em UTC. Índice por estado e criação. |

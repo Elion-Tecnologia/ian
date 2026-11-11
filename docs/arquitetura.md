@@ -10,7 +10,8 @@
 O IA.N gerencia uma única agenda de uma loja de móveis planejados,
 operada exclusivamente por uma administradora em conversa privada no
 Telegram, somente por texto. O MVP não inclui equipes, grupos, jornadas
-excepcionais, folgas ou dashboards.
+excepcionais, folgas, bloqueios administrativos, resumo automático,
+prorrogação manual, reabertura ou dashboards.
 
 A aplicação deve interpretar solicitações em linguagem
 natural, executar operações autorizadas e preservar a
@@ -390,9 +391,12 @@ nem AgendaId para uma única agenda.
 InicioUtc e FimUtc e a cardinalidade 1:N. Cada intervalo representa
 ocupação efetiva `[início,fim)` na única agenda. O expediente proposto é
 fixo, 08h–18h em America/Sao_Paulo, todos os dias. Dias corridos contam
-as datas consecutivas, incluindo a data inicial parcial; não há recálculo
-por folgas ou exceções. Bloqueios da agenda única recusam conflitos,
-sem prorrogar ou mover serviços automaticamente.
+as datas consecutivas com janelas completas 08h–18h, inclusive na primeira
+data. Sete dias são sete janelas completas. Horário informado diferente de
+08h exige esclarecimento, sem criar período parcial ou corrigir a intenção
+por inferência. A duração em minutos mantém seus horários próprios.
+BloqueioAgenda será arquivada e retirada do modelo ativo somente na #79;
+não haverá operação administrativa de bloqueio no MVP.
 
 A migração deve preservar equipes antigas, seus vínculos, exceções e o
 escopo dos bloqueios em arquivo legado antes da retirada do modelo ativo.
@@ -404,11 +408,13 @@ O plano com entidades, FKs, índices, pré-validação e retorno está em
 
 O banco atual possui checks de intervalo, FKs e índices, mas não uma
 constraint de exclusão de sobreposições. A agenda única exigirá que todos
-os casos de uso que alterem reservas ou bloqueios adquiram o mesmo
+os casos de uso que criem ou alterem reservas adquiram o mesmo
 `pg_advisory_xact_lock` antes de consultar conflitos e gravar, na mesma
 transação READ COMMITTED. A consulta após adquirir o lock considera
-ocupações de agendamentos Agendados e bloqueios globais. Assim não há
-corrida entre duas reservas ou entre reserva e bloqueio no fluxo da aplicação.
+ocupações de agendamentos Agendados. O protocolo proposto serializa criar,
+editar, reagendar, concluir e cancelar, evitando corridas entre reservas.
+Bloqueios legados exigem reconciliação na migração, sem nova funcionalidade
+de bloqueio no MVP.
 
 Versao evita sobrescrever edições e consumir confirmações obsoletas.
 Todas as mutações devem usar o protocolo; SQL administrativo fora dele
@@ -451,26 +457,18 @@ devidamente justificada.
 Integrações externas não devem presumir
 garantia absoluta de execução exatamente uma vez.
 
-## 9. Processamentos periódicos
+## 9. Consultas e respostas sob demanda
 
-A arquitetura prevê serviços periódicos
-hospedados no processo da API.
+O MVP mantém consultas textuais da agenda e o envio normal de respostas
+no privado da administradora. A #47 formata os resultados; #18/#51 tratam
+transporte, persistência e recuperação dos envios, sem depender de um
+agendador de resumos. Falha de sendMessage não pode ser relatada como entrega.
 
-O resumo diário deverá ser executado às
-07h50, no fuso `America/Sao_Paulo`.
-
-Ele deverá:
-
-- Considerar os serviços do dia na agenda única.
-- Enviar somente ao privado da administradora autorizada.
-- Incluir serviços prolongados em execução.
-- Não enviar mensagem sem serviços Agendados.
-- Registrar sua execução.
-- Evitar duplicidade após reinicializações.
-
-O agendador e seu controle persistente de
-execução ainda não estão implementados na
-versão consultada.
+O resumo automático às 07h50 (#50) foi retirado em 11/11/2026. Não haverá
+serviço de resumo ou controle de execução desse job no MVP. O BackgroundService
+da inbox e a recuperação de respostas permanecem parte da arquitetura.
+Prorrogação manual (#40) fica pós-MVP; #35/#45 abrangem somente as operações
+de estado incluídas na lista criar, consultar, editar, reagendar, concluir e cancelar.
 
 ## 10. Configurações e credenciais
 

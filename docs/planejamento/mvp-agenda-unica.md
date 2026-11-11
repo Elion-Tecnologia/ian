@@ -1,41 +1,51 @@
 # MVP textual de agenda única — planejamento revisado
 
-Decisão aprovada em 10/11/2026. Uma agenda, uma administradora, comandos textuais privados. Stack e controles técnicos preservados. DRS 2.0 contém as regras vigentes; o [plano de migração](migracao-agenda-unica.md) distingue o legado implementado do modelo proposto.
+Decisão inicial de 10/11/2026, corrigida em 11/11/2026. Uma agenda, uma administradora, comandos textuais privados. DRS 2.1 contém as regras vigentes; o [plano de migração](migracao-agenda-unica.md) distingue o legado implementado do modelo proposto.
 
-## Entregas desta revisão
+## Escopo vigente
 
-- PR #77 encerrada sem merge e #17 encerrada como Not planned.
-- #78 criada para limpeza da infraestrutura de voz integrada em dev; implementação em feature/remove-voice, PR para dev.
-- #79 criada para migração posterior do modelo, preservação de dados e retirada dos contratos legados de grupos. Nenhuma migration gerada/aplicada nesta revisão.
-- 36 issues de execução e sete épicos abertos reescritos; notas de transição nas entregas concluídas #1/#12/#15/#19, sem reabri-las ou apagar suas evidências.
-- Equipes, grupos, jornadas excepcionais, folgas e dashboards fora do MVP. Não havia uma issue exclusiva de dashboard no backlog consultado; não foi criada uma entrega equivalente.
+- Criar, consultar, editar, reagendar, concluir e cancelar agendamentos individuais.
+- DiasCorridos reserva uma janela completa 08h–18h em cada data consecutiva, inclusive na primeira e nos domingos. Sete dias são sete janelas completas.
+- Horário informado diferente de 08h em DiasCorridos exige esclarecimento antes de reservar; não assumir início parcial ou corrigir a intenção silenciosamente. Sem horário informado, usar a janela fixa. Minutos mantém seu cálculo próprio.
+- Consultas textuais sob demanda e respostas normais no privado da administradora permanecem; #18/#51 tratam o envio e a recuperação de respostas pendentes.
+- Sem equipes, grupos, jornadas excepcionais, folgas, bloqueios administrativos, resumo automático, reabertura, prorrogação manual ou dashboards no MVP.
+- Nenhuma alteração em Domain, EF Core ou migrations nesta PR. BloqueioAgenda permanece no código legado e só será retirada do modelo ativo na #79, com preservação de registros, intervalos e relações históricas.
+
+## Entregas e estado
+
+PR #77 encerrada sem merge; #17 Not planned. #78 remove a infraestrutura de voz integrada; implementação em feature/remove-voice, Draft PR #80 para dev. #79 acompanha a migração posterior do modelo e a retirada de contratos de grupos, sem execução nesta PR.
+
+A rodada anterior reescreveu 36 issues e sete épicos e anotou a transição em #1/#12/#15/#19 sem reabri-las. Esta revisão corrige as regras e dependências afetadas. As issues #38/#53/#50 foram encerradas como Not planned; #40 continua aberta explicitamente como pós-MVP, fora dos critérios de entrega e das dependências ativas.
 
 ## Encerradas como Not planned
 
 | Issue | Escopo retirado |
 | --- | --- |
 | #17 | Entrada de voz/transcrição. |
-| #27 | [T19][P0] Cadastrar, consultar e renomear equipes |
-| #28 | [T20][P1] Desativar equipe com verificação de agenda futura |
-| #29 | [T21][P1] Descobrir e confirmar vínculo de grupo Telegram |
-| #34 | [T26][P1] Transferir serviço entre equipes |
-| #36 | [T28][P1] Modelar jornadas especiais por equipe |
-| #37 | [T29][P1] Prorrogar serviços em folgas integrais |
-| #39 | [T31][P2] Permitir exceção explícita fora do expediente |
-| #48 | [T40][P1] Enviar programação ao grupo somente sob aprovação |
-| #49 | [T41][P2] Detectar mudança posterior e oferecer atualização da programação |
+| #27 / #28 | Cadastro, renomeação e desativação de equipes. |
+| #29 | Vínculo de grupos Telegram. |
+| #34 | Transferência entre equipes. |
+| #36 / #37 / #39 | Jornadas especiais, compensação de folgas e exceção de expediente. |
+| #48 / #49 | Envio e atualização de programação em grupos. |
+| #38 | Bloqueios administrativos, globais ou individuais. |
+| #53 | Testes de bloqueios/prorrogação que saíram do MVP. |
+| #50 | Resumo automático às 07h50. |
 
-O conteúdo anterior dessas issues foi preservado como histórico, com a decisão de encerramento anexada. Nenhum encerramento removeu registros ou alterou banco.
+Os corpos anteriores das issues encerradas ficam identificados como histórico; seus critérios não são requisitos ativos. Encerrar uma issue não apaga dados do banco.
 
-## Issues e épicos mantidos
+## Adiada para pós-MVP
+
+#40 permanece aberta para eventual refinamento futuro da operação dedicada de prorrogação por atraso. Não expor essa Tool nem bloquear o MVP por ela. Reabertura também não compõe as seis operações: #35/#45 foram limitadas a concluir/cancelar e às alterações de Agendado. Edição/reagendamento continua sujeito à validação de duração, versão e conflito, sem extensão automática ou silenciosa.
+
+## Issues e épicos mantidos no MVP
 
 | Issue | Escopo vigente |
 | --- | --- |
 | #2 | [ÉPICO 02] Entrada textual privada e processamento durável Telegram |
 | #3 | [ÉPICO 03] MAF, Gemini e conversa textual da agenda única |
 | #4 | [ÉPICO 04] Clientes e catálogo de serviços |
-| #5 | [ÉPICO 05] Agenda única, ocupação e bloqueios |
-| #6 | [ÉPICO 06] Consultas e resumo privado da agenda única |
+| #5 | [ÉPICO 05] Agenda única e ocupação de agendamentos |
+| #6 | [ÉPICO 06] Consultas sob demanda e respostas textuais privadas |
 | #7 | [ÉPICO 07] Segurança, auditoria e testes do MVP textual |
 | #8 | [ÉPICO 08] Operação, backup e release do MVP textual |
 | #18 | [T10][P1] Tratar falhas e indisponibilidade de respostas textuais Telegram |
@@ -50,20 +60,16 @@ O conteúdo anterior dessas issues foi preservado como histórico, com a decisã
 | #31 | [T23][P0] Criar agendamento na agenda única com proteção concorrente |
 | #32 | [T24][P0] Consultar agenda única e disponibilidade por filtros |
 | #33 | [T25][P1] Editar e reagendar na agenda única preservando histórico |
-| #35 | [T27][P1] Concluir, cancelar e reabrir agendamentos |
-| #38 | [T30][P1] Criar e remover bloqueios da agenda única |
-| #40 | [T32][P2] Prorrogação manual de serviço atrasado |
+| #35 | [T27][P1] Concluir e cancelar agendamentos preservando histórico |
 | #41 | [T33][P1] Implementar busca única e desambiguação de agendamentos |
 | #42 | [T34][P1] Registrar auditoria de mudanças e ações das Tools |
 | #43 | [T35][P0] Implementar Tools de consulta de clientes, serviços e agenda única |
 | #44 | [T36][P0] Criar primeiro agendamento textual ponta a ponta na agenda única |
 | #45 | [T37][P1] Implementar Tools de edição e estado da agenda única |
-| #46 | [T38][P1] Implementar Tools de clientes e bloqueios da agenda única |
-| #47 | [T39][P1] Formatar programação textual da agenda única para a administradora |
-| #50 | [T42][P1] Enviar resumo privado da agenda única às 07h50 |
-| #51 | [T43][P1] Persistir respostas e resumos privados com retentativas controladas |
+| #46 | [T38][P1] Implementar Tools de cadastro e edição de clientes |
+| #47 | [T39][P1] Formatar consultas textuais sob demanda da agenda única |
+| #51 | [T43][P1] Persistir respostas textuais privadas com retentativas controladas |
 | #52 | [T44][P0] Testar duração e conflitos da agenda única |
-| #53 | [T45][P1] Testar bloqueios e prorrogação manual da agenda única |
 | #54 | [T46][P1] Testar PostgreSQL e Telegram textual ponta a ponta |
 | #55 | [T47][P1] Revisar segredos, autorização textual e privacidade do MVP |
 | #56 | [T48][P1] Implementar tratamento de falhas, limites e observabilidade mínima |
@@ -72,28 +78,28 @@ O conteúdo anterior dessas issues foi preservado como histórico, com a decisã
 | #59 | [T51][P1] Homologar o MVP textual de agenda única |
 | #60 | [T52][P1] Preparar release local do MVP e retorno seguro |
 | #61 | [T53][P3] Avaliar hospedagem contínua da API e webhook |
-| #62 | [T54][P2] Validar datas e fuso da agenda única e do resumo |
+| #62 | [T54][P2] Validar datas e fuso da agenda única |
 | #63 | [T55][P2] Executar testes de diálogos incompletos e retomada de contexto |
-| #78 | Limpeza textual já implementada nesta branch, aguardando PR/revisão. |
-| #79 | Persistência/contratos da agenda única; proposta aguardando revisão. |
+| #78 | [MVP] Remover infraestrutura de mensagens de voz integrada à dev |
+| #79 | [MVP][P0] Migrar modelo legado para agenda única com preservação de dados |
 
 ## Sequência e dependências principais
 
-1. Revisar/validar #78 e o plano #79. Sem merge implícito.
-2. #57/#58: identificar ambientes e ensaiar backup/restauração; inventário somente leitura antes da migração #79. Ausência de conexão neste ambiente não prova banco vazio.
-3. #79: migrar após autorização, reconciliando conflitos legados. Não implementar funcionalidades usando uma equipe fictícia para satisfazer FK antiga.
-4. #20–#22, #24–#26 e #42: contratos de Tools, pendência/confirmação, catálogo/clientes e auditoria podem avançar pelas dependências próprias. Casos de uso devem usar contratos finais.
-5. #30–#33/#35/#38/#40/#41: duração, escrita/consulta, estado, bloqueio e prorrogação da agenda única; nenhuma referência funcional a equipes.
-6. #43/#44: Tools de leitura e criação textual ponta a ponta; depois #45/#46 para alterações, clientes e bloqueios.
-7. #18/#51/#47/#50: saída textual resiliente, envio persistente, formatação e resumo privado. #51 não depende do resumo para evitar ciclo; #50 depende do transporte persistente.
-8. #52–#56/#62/#63: regressão de domínio, concorrência, segurança e conversa. #59/#60: homologação/release; #61 é avaliação futura de hospedagem.
+1. Revisar #78 e o plano #79; sem merge implícito.
+2. #57/#58: identificar ambientes e ensaiar backup/restauração; inventário somente leitura antes da #79. O usuário confirmou que ainda não configurou os secrets; isso não prova banco vazio.
+3. #79: migrar somente após autorização e reconciliação explícita de conflitos entre equipes antigas, primeiras datas parciais, exceções e efeitos dos bloqueios legados. Arquivar bloqueios integralmente, sem convertê-los em funcionalidade global.
+4. #20–#22, #24–#26 e #42: contratos de Tools, pendência/confirmação, catálogo/clientes e auditoria avançam pelas dependências próprias.
+5. #30–#33/#35/#41: cálculo com janelas completas, criar/consultar/editar/reagendar/concluir/cancelar e desambiguar; sem dependências de #38/#40/#50/#53.
+6. #43/#44: Tools de leitura e criação textual ponta a ponta; depois #45/#46 para edição/estado e clientes.
+7. #47 e #18/#51: formatação de consultas sob demanda e envio normal de respostas privadas, sem scheduler de resumo.
+8. #52/#54–#56/#62/#63: regressão de domínio, calendário, concorrência, segurança e conversa. #59/#60: homologação/release; #61 avalia hospedagem futura.
 
-As dependências completas estão nos corpos atualizados das issues. As tarefas concluídas #9–#16 e #19 permanecem concluídas; a #12 descreve esquema legado e não significa agenda única implementada. Os épicos #2–#8 permanecem abertos com escopo reduzido; #1 mantém a conclusão histórica da fundação.
+As dependências completas estão nos corpos das issues. #9–#16 e #19 permanecem concluídas; a modelagem histórica #12 não significa agenda única implementada. #2–#8 permanecem abertos; #1 mantém a conclusão histórica da fundação.
 
-## Estado técnico verificável
+## Preservação de dados e verificação
 
-A limpeza removeu 13 arquivos exclusivos de voz, DI/options/configuração e projeção de mídia; mantém os três componentes de IA, webhook, processamento durável, idempotência e auditoria. O parser preserva identificação/texto e não projeta voice/audio. Os testes cobrem mensagem de mídia já armazenada e recém-projetada sem executar comando.
+O código ainda contém Equipe, ExcecaoExpediente, BloqueioAgenda, EquipeId e o candidato técnico de grupo. Esses objetos serão tratados na #79 após inventário/backup, com dados históricos preservados. Não ampliar períodos antigos silenciosamente para satisfazer as janelas novas nem excluir conflitos entre equipes.
 
-O código ainda possui Equipe/ExcecaoExpediente/EquipeId e o candidato técnico de grupo, sem casos de uso de agenda ou vínculo ativo. Sua remoção integra #79 após revisão, preservando histórico. Não confundir essa presença com requisito vigente.
+A limpeza técnica #78 removeu 13 arquivos de voz, DI/options/configuração e projeção voice/audio, preservando identificação, texto, integração IA, webhook, inbox, idempotência e auditoria. Sua regressão Release registrou 111 aprovados, nove ignorados e zero falhas. Os sete PostgreSQL continuam não executados, sem banco descartável; dois smokes Gemini permanecem sem opt-in. Esta correção de planejamento não implementa regras novas nem autoriza SQL ou chamadas Google.
 
-Verificação local: restore concluído, build Release com zero avisos/erros, 111 aprovados, nove ignorados, zero falhas. Sete ignorados são PostgreSQL sem banco descartável; dois são smokes Gemini sem opt-in. Nenhum SQL PostgreSQL ou envio Google foi executado.
+Revisão de 11/11/2026: build Release novamente concluído com zero erros/avisos; regressão com 111 aprovados, nove ignorados e zero falhas (total 120). O diff desta continuação contém somente documentação; Domain, EF Core e migrations permanecem intactos. A conferência das dependências ativas não encontrou referências a #38/#40/#50/#53 como pré-requisitos do MVP.

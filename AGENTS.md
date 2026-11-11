@@ -32,8 +32,11 @@ em conversa privada no Telegram, somente por texto.
 - Agendamentos ativos da agenda única não podem possuir períodos
   de ocupação conflitantes.
 - Apenas mensagens textuais privadas da administradora podem iniciar comandos.
-- Equipes, grupos Telegram, jornadas excepcionais, folgas e dashboards
-  estão fora do MVP.
+- Equipes, grupos Telegram, jornadas excepcionais, folgas, bloqueios
+  administrativos, resumo automático, prorrogação manual, reabertura e
+  dashboards estão fora do MVP.
+- DiasCorridos reserva 08h–18h em cada data, inclusive a primeira. Horário
+  divergente exige esclarecimento antes de reservar; não assumir início parcial.
 - Operações sensíveis exigem confirmação, conforme o DRS.
 - Preservar histórico e auditoria das alterações.
 
@@ -68,7 +71,9 @@ Quando uma implementação modificar contratos, decisões técnicas
 ou comportamentos documentados, identifique os documentos e
 exemplos de API que precisam ser atualizados.
 ## Transição para o MVP
-O modelo persistente legado ainda contém EquipeId, Equipe e ExcecaoExpediente.
+O modelo persistente legado ainda contém EquipeId, Equipe, ExcecaoExpediente
+e BloqueioAgenda. A retirada dessas estruturas do modelo ativo fica na #79,
+com preservação dos dados históricos; não alterar Domain/EF/migrations na #78.
 A proposta da agenda única está no DRS e em docs/planejamento/migracao-agenda-unica.md.
 Não confundir a proposta com implementação. A issue #79 acompanha a migração
 incremental, ainda não executada; preservar dados e histórico e nunca reescrever
