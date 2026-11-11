@@ -118,8 +118,8 @@ não existe CRUD livre do catálogo.
 | RF-004 | Consultar por período, cliente, serviço e estado, combinando filtros; sem filtro de equipe. |
 | RF-010 | Interpretar linguagem natural textual, coletar dados ausentes e chamar Tools autorizadas. |
 | RF-011 / RF-012 | Receber comandos e responder exclusivamente em texto no privado autorizado. |
-| RF-013 / RF-014 | Reutilizar clientes por telefone normalizado único e criar cliente/primeiro agendamento atomicamente. |
-| RF-015 / RF-016 | Manter endereço principal e editar cliente sem alterar snapshots históricos. |
+| RF-013 / RF-014 | Cadastrar e localizar clientes por telefone normalizado único; a #31 criará cliente/primeiro agendamento atomicamente. |
+| RF-015 / RF-016 | Manter endereço principal opcional; edição cadastral não faz parte da #25 nem do MVP simplificado atual. |
 | RF-017 / RF-018 | Editar modalidade/dados de Agendado, validando impacto e preservando auditoria. |
 
 RF-005 (resumo automático), RF-008 (programação de grupo) e RF-009
@@ -174,8 +174,13 @@ Identificadores retirados não serão reutilizados para funcionalidades diferent
 ### 6.3 Clientes, conversa e resiliência
 
 - Telefone normalizado é obrigatório e único no banco; busca 0/1/N trata
-  ausência e ambiguidade. Cadastro automático reutiliza identidade inequívoca.
-- Editar o cliente não altera endereço snapshot de agendamentos anteriores.
+  ausência e ambiguidade. Números brasileiros com DDD usam representação
+  canônica de 10 ou 11 dígitos, sem `+55` e sem máscara.
+- Cadastro repetido reutiliza a identidade inequívoca sem sobrescrever nome ou
+  endereço. Busca por nome ignora caixa, normaliza espaços, limita resultados
+  e nunca escolhe automaticamente entre vários clientes.
+- Edição cadastral permanece fora do MVP simplificado. Futuras alterações de
+  cliente não poderão modificar snapshots de agendamentos anteriores.
 - RN-025 / RN-026: persistir estado mínimo da solicitação, com uma mutação
   pendente por administradora. Consulta não descarta a pendência; substituí-la
   exige confirmação. Recuperar após reinício e tratar expiração.
@@ -215,7 +220,7 @@ como requisito ativo.
 
 | Componente | Proposta final do MVP | Estado do código nesta entrega |
 | --- | --- | --- |
-| Cliente / TipoServico | Preservar cadastro, unicidade e catálogo | Entidades/mapeamentos presentes; catálogo fixo sem CRUD, seed e consulta read-only implementados na #24. |
+| Cliente / TipoServico | Preservar cadastro, unicidade e catálogo | Cadastro/localização de cliente implementados na #25, com concorrência pela constraint única; catálogo fixo sem CRUD, seed e consulta read-only implementados na #24. |
 | Agendamento | Sem EquipeId; campos abaixo | Sem EquipeId; Versao >=1 como token EF, incremento explícito por mutação. |
 | PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Entidade persistente preservada; motor puro de geração e sobreposição implementado na #30. |
 | BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Sem entidade/DbSet ativo; tabela original movida para legado_mvp pela consolidação. |
@@ -261,7 +266,8 @@ Testes de callbacks sintéticos não comprovam os casos de uso completos.
 CA-04 (folga), CA-06 (grupo), CA-07 (atualização de grupos), CA-08 (resumo)
 e CA-16 (bloqueios administrativos) foram retirados.
 Testes usam dados sintéticos e fakes de Gemini/Telegram; PostgreSQL usa banco
-isolado. Testes ignorados não são aprovados. Os sete testes PostgreSQL existentes e os novos testes de migração/concorrência foram executados em banco descartável. Smokes reais Gemini permanecem desativados.
+isolado. Testes ignorados não são aprovados. Testes de integração devem informar
+explicitamente o banco descartável confirmado. Smokes reais Gemini permanecem desativados.
 
 ## 9. Segurança, qualidade e operação
 
@@ -269,8 +275,8 @@ Credenciais ficam em fontes seguras do .NET. Logs usam correlação, sem
 conteúdo integral de mensagens, prompts, dados pessoais ou autenticação.
 Mutações críticas e auditoria são transacionais. Backups diários devem ter
 retenção definida e restauração ensaiada. Não há garantia 24/7 em Mac desligado.
-Hospedagem permanente, retenção e detalhes de
-normalização de telefones continuam nas issues correspondentes.
+Hospedagem permanente e retenção continuam nas issues correspondentes. A #25
+define a normalização determinística de telefones brasileiros no backend.
 
 ## 10. Planejamento e migração
 

@@ -120,7 +120,7 @@ Não iniciar a API de teste apontando para a origem: o consumidor da inbox escre
 
 | Tabela ativa | Regras |
 | --- | --- |
-| clientes | Telefone normalizado obrigatório e único; endereço principal opcional. |
+| clientes | Cadastro e busca da #25; telefone brasileiro canônico obrigatório e único; endereço principal opcional; resultados 0/1/N sem seleção ambígua. |
 | tipos_servico | Catálogo fixo da #24 com quatro IDs estáveis e duração/unidade/modalidade padrão; consulta somente leitura. |
 | agendamentos | Cliente e serviço obrigatórios; sem equipe; Versao >=1 como token EF; estado e endereço snapshot preservados. |
 | periodos_ocupacao | Relação 1:N com agendamento; intervalos UTC semiabertos; sem recálculo na migração. |

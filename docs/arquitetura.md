@@ -108,6 +108,7 @@ Componentes existentes:
 - `TelegramUpdateDispatcher`
 - `ITelegramUpdateInboxWriter`
 - `ITelegramInboxProcessingStore`
+- `IClientes` / `ClientesApplication`
 
 A camada Application pode depender de Domain.
 
@@ -141,6 +142,9 @@ Componentes de agenda puros em `Ian.Domain/Agenda/`:
 - `ResultadoCalculoOcupacao`: distingue cálculo, esclarecimento e entrada inválida.
 - `PeriodoCalculado`: intervalo UTC semiaberto e teste de sobreposição.
 
+`Ian.Domain/Clientes/NormalizadorTelefoneBrasileiro` concentra a regra pura de
+normalização para 10/11 dígitos nacionais, removendo máscara e o prefixo `55`.
+
 A existência de uma entidade não significa que todos
 os casos de uso associados estejam implementados.
 
@@ -167,6 +171,7 @@ Componentes existentes:
 - `Persistence/PostgresTelegramInboxProcessingStore.cs`
 - `Persistence/TelegramBusinessOperationExecutor.cs`
 - `Persistence/PostgresTipoServicoCatalogo.cs`
+- `Persistence/PostgresClienteStore.cs`
 - `Telegram/TelegramInboxBackgroundService.cs`
 - `Telegram/TelegramInboxConsumer.cs`
 - `DependencyInjection.cs`
@@ -181,6 +186,14 @@ um agendamento continuam independentes dos padrões do catálogo.
 A idempotência do seed é garantida pelo histórico de migrations do EF Core:
 a migration executa inserts normais uma única vez e falha diante de conflitos,
 sem UPSERT silencioso. Ela também preserva uma sequence já mais adiantada.
+
+O cadastro de clientes é coordenado por `ClientesApplication`. A preparação
+valida e adiciona um novo `Cliente` ao `IanDbContext`, mas não chama
+`SaveChanges`, permitindo que a #31 use o mesmo contexto e a mesma transação do
+primeiro agendamento. `PostgresClienteStore` mantém as consultas sem tracking e
+trata como duplicidade somente a `UniqueViolation` da constraint de telefone;
+outras falhas de banco são propagadas. A busca por nome usa `ILIKE` parametrizado,
+escapa curingas, limita a resposta e mantém ordenação estável.
 
 ### 3.5 Ian.Tests
 
