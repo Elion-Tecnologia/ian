@@ -246,8 +246,31 @@ namespace Ian.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<DateTimeOffset>("AtualizadaEmUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("CamposFaltantesJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("CandidatosJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
                     b.Property<DateTimeOffset>("CriadaEmUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DadosColetadosJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
 
                     b.Property<string>("Estado")
                         .IsRequired()
@@ -267,13 +290,23 @@ namespace Ian.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TelegramUserId")
+                        .IsUnique()
+                        .HasFilter("\"Estado\" = 'Pendente'");
+
                     b.HasIndex("TelegramUserId", "Estado", "ExpiraEmUtc");
 
                     b.ToTable("solicitacoes_pendentes", null, t =>
                         {
+                            t.HasCheckConstraint("ck_solicitacoes_candidatos_objeto", "jsonb_typeof(\"CandidatosJson\") = 'object'");
+
+                            t.HasCheckConstraint("ck_solicitacoes_dados_objeto", "jsonb_typeof(\"DadosColetadosJson\") = 'object'");
+
                             t.HasCheckConstraint("ck_solicitacoes_estado", " \"Estado\" IN ('Pendente', 'Confirmada', 'Cancelada', 'Expirada') ");
 
                             t.HasCheckConstraint("ck_solicitacoes_expiracao", " \"CriadaEmUtc\" < \"ExpiraEmUtc\" ");
+
+                            t.HasCheckConstraint("ck_solicitacoes_faltantes_array", "jsonb_typeof(\"CamposFaltantesJson\") = 'array'");
                         });
                 });
 

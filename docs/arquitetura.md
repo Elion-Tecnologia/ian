@@ -140,6 +140,15 @@ Entidades existentes em `Ian.Domain/Entities/` (modelo ativo da #79):
 - TelegramUpdateInbox
 - TelegramBusinessOperation
 
+`SolicitacaoPendente` armazena, por usuário Telegram autorizado, apenas a
+intenção, os campos coletados/faltantes e IDs candidatos necessários para
+retomar uma mutação. Uma restrição única permite no máximo uma solicitação
+Pendente por usuário. Consultas leem o estado sem substituí-lo; trocar intenção
+exige confirmação, seleção ambígua exige um ID explícito, e solicitações expiram
+após 30 minutos. O conteúdo original da conversa e prompts não são persistidos.
+Na migration inicial, pendências placeholder sem campos recuperáveis são marcadas
+Expirada, mantendo seus registros históricos.
+
 Componentes de agenda puros em `Ian.Domain/Agenda/`:
 
 - `CalculadoraOcupacao`: gera janelas em UTC para Minutos e DiasCorridos.
