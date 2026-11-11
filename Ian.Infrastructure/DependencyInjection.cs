@@ -9,6 +9,7 @@ using Npgsql;
 using Ian.Application.Telegram;
 using Ian.Application.AI;
 using Ian.Application.Catalogo;
+using Ian.Application.Clientes;
 using Ian.Infrastructure.AI;
 
 namespace Ian.Infrastructure;
@@ -76,6 +77,8 @@ public static class DependencyInjection
         services.AddScoped<TelegramBusinessOperationExecutor>();
         services.AddScoped<AgendaMutationExecutor>();
         services.AddScoped<ITipoServicoCatalogo, PostgresTipoServicoCatalogo>();
+        services.AddScoped<IClienteStore, PostgresClienteStore>();
+        services.AddScoped<IClientes, ClientesApplication>();
 
         services.AddScoped<DeferredTelegramHandlers>();
 
