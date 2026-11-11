@@ -1,6 +1,8 @@
 using Ian.Domain.Entities;
 using Ian.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Ian.Tests;
 
@@ -43,6 +45,59 @@ public sealed class TipoServicoCatalogoPostgresTests
 
         Assert.Equal(before, await ReadCatalogAsync(db));
         Assert.Equal(4, await db.TiposServico.CountAsync());
+    }
+
+    [PostgresFact]
+    public async Task NextGeneratedIdentityDoesNotReuseReservedIds()
+    {
+        await InitializeAsync();
+        await using var db = PostgresTestDatabase.CreateContext();
+        var technical = new TipoServico
+        {
+            Nome = "Synthetic identity",
+            DuracaoPadrao = 1,
+            UnidadeDuracaoPadrao = UnidadeDuracao.Minutos,
+            ModalidadePadrao = ModalidadeServico.Interno
+        };
+
+        db.TiposServico.Add(technical);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(5, technical.Id);
+        Assert.Equal([1L, 2L, 3L, 4L], await db.TiposServico
+            .Where(tipo => tipo.Id <= 4)
+            .OrderBy(tipo => tipo.Id)
+            .Select(tipo => tipo.Id)
+            .ToListAsync());
+    }
+
+    [PostgresFact]
+    public async Task PreviouslyAdvancedIdentitySequenceDoesNotMoveBackward()
+    {
+        await PostgresTestDatabase.ResetAsync();
+        await using var db = PostgresTestDatabase.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync(SingleCalendarMigrationTests.Consolidation);
+        await SingleCalendarMigrationTests.Sql(
+            "SELECT setval('public.\"tipos_servico_Id_seq\"', 100, true)");
+
+        await db.Database.MigrateAsync();
+
+        Assert.Equal(100, await SingleCalendarMigrationTests.Scalar(
+            "SELECT last_value FROM public.\"tipos_servico_Id_seq\""));
+        Assert.Equal(1, await SingleCalendarMigrationTests.Scalar(
+            "SELECT CASE WHEN is_called THEN 1 ELSE 0 END FROM public.\"tipos_servico_Id_seq\""));
+
+        var technical = new TipoServico
+        {
+            Nome = "Synthetic advanced identity",
+            DuracaoPadrao = 1,
+            UnidadeDuracaoPadrao = UnidadeDuracao.Minutos,
+            ModalidadePadrao = ModalidadeServico.Interno
+        };
+        db.TiposServico.Add(technical);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(101, technical.Id);
     }
 
     [PostgresFact]

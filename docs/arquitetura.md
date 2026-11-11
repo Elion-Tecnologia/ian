@@ -172,6 +172,9 @@ O catálogo fixo de `TipoServico` é populado por migration EF com IDs estáveis
 `ITipoServicoCatalogo` expõe somente projeções imutáveis; sua implementação
 PostgreSQL usa consulta sem rastreamento. Duração e modalidade copiadas para
 um agendamento continuam independentes dos padrões do catálogo.
+A idempotência do seed é garantida pelo histórico de migrations do EF Core:
+a migration executa inserts normais uma única vez e falha diante de conflitos,
+sem UPSERT silencioso. Ela também preserva uma sequence já mais adiantada.
 
 ### 3.5 Ian.Tests
 
