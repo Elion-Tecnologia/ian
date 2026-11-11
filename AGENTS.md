@@ -76,7 +76,8 @@ que preservam equipes, exceções, bloqueios e vínculos antigos em legado_mvp.
 As quatro migrations históricas devem permanecer intactas. As migrations da
 #79 e do catálogo #24 foram aplicadas em ian_t03_tmp após autorização e
 validação; qualquer migration posterior continua exigindo autorização específica.
-#30 implementa o motor de ocupações no Domain; #31–#33/#35 integrarão os casos de uso.
+#30 implementa o motor de ocupações no Domain; #31 integra a criação transacional;
+#32/#33/#35 integrarão os demais casos de uso.
 Testes de infraestrutura não comprovam esses fluxos funcionais.
 Testes PostgreSQL exigem conexão descartável local ian_t<numero>_tests e
 IAN_TEST_POSTGRES_DATABASE com o mesmo nome; nunca apontar para a origem

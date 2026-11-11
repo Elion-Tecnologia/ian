@@ -109,6 +109,7 @@ Componentes existentes:
 - `ITelegramUpdateInboxWriter`
 - `ITelegramInboxProcessingStore`
 - `IClientes` / `ClientesApplication`
+- `ICriacaoAgendamento` / `CriacaoAgendamentoApplication`
 
 A camada Application pode depender de Domain.
 
@@ -172,6 +173,7 @@ Componentes existentes:
 - `Persistence/TelegramBusinessOperationExecutor.cs`
 - `Persistence/PostgresTipoServicoCatalogo.cs`
 - `Persistence/PostgresClienteStore.cs`
+- `Persistence/PostgresAgendaCriacaoStore.cs`
 - `Telegram/TelegramInboxBackgroundService.cs`
 - `Telegram/TelegramInboxConsumer.cs`
 - `DependencyInjection.cs`
@@ -194,6 +196,13 @@ primeiro agendamento. `PostgresClienteStore` mantém as consultas sem tracking e
 trata como duplicidade somente a `UniqueViolation` da constraint de telefone;
 outras falhas de banco são propagadas. A busca por nome usa `ILIKE` parametrizado,
 escapa curingas, limita a resposta e mantém ordenação estável.
+
+`CriacaoAgendamentoApplication` aplica catálogo e cálculo no Application e entra
+no protocolo `IAgendaMutationExecutor` antes de preparar o cliente e consultar a
+disponibilidade definitiva. `PostgresAgendaCriacaoStore` persiste o agendamento e
+seus períodos e vincula a barreira idempotente ao ID confirmado. O cliente novo
+pode receber ID por `SaveChanges` intermediário, mas permanece dentro da mesma
+transação ainda não confirmada; conflito ou falha reverte todas as escritas.
 
 ### 3.5 Ian.Tests
 
@@ -438,9 +447,10 @@ o protocolo; SQL manual que o ignore não é protegido.
 A #30 implementa o motor determinístico no Domain, com jornada fixa 08h–18h
 todos os dias em America/Sao_Paulo e geração de janelas em minutos/dias corridos.
 As verificações da migration apenas recusam legado incompatível, sem recalcular ocupações.
-Os casos de uso #31–#33/#35 e as tools ainda precisam integrar concorrência,
-disponibilidade, autorização, confirmação e auditoria. Não estão implementados
-por esta infraestrutura.
+A #31 implementa criação com disponibilidade, transação, lock e idempotência.
+Os casos de uso #32/#33/#35 e as tools ainda precisam integrar consultas,
+edições, estados, autorização conversacional e confirmações; não são entregues
+pela criação.
 ## 8. Idempotência e recuperação
 
 O recebimento utiliza `update_id` para identificar
@@ -460,6 +470,11 @@ A chave da operação é composta por:
 
 O registro dessa chave e a escrita correspondente
 devem ser confirmados na mesma transação.
+
+A migration `VincularOperacaoAoAgendamento` adiciona `AgendamentoId` nullable e
+FK restritiva à operação técnica. Registros anteriores permanecem com vínculo
+nulo; novas criações gravam o ID antes do commit. O `Down` automático é recusado
+para não apagar a identificação necessária às reentregas.
 
 Os futuros handlers de escrita devem respeitar
 esse mecanismo ou adotar proteção equivalente

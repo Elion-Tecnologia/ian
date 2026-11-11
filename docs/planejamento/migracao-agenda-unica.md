@@ -21,9 +21,10 @@ seguinte; 240 minutos às 16h produz 16h–18h e 08h–10h no dia seguinte.
 Nenhum desses cálculos de criação foi implementado na #79.
 
 As verificações SQL da migração apenas rejeitam dados ativos incompatíveis;
-não são motor de geração de períodos. Os casos de uso #31–#33/#35, autorizações,
-confirmações persistentes e tools deverão integrar o protocolo antes da ativação
-funcional. Testes de callbacks sintéticos não comprovam esses casos de uso.
+não são motor de geração de períodos. A #31 passou a integrar criação e
+disponibilidade ao protocolo. #32/#33/#35, autorizações, confirmações persistentes
+e tools continuam dependências próprias. Testes de callbacks sintéticos não
+comprovam esses casos de uso.
 
 ## 2. Inventário e backup comprovados
 
@@ -167,8 +168,9 @@ idempotência; autorização textual e recuperação da inbox.
 
 Fakes de Gemini/Telegram; smokes Gemini explicitamente desativados.
 Resultados executados são registrados no relatório de validação da entrega.
-#30 cobre geração de janelas e seus testes funcionais completos. #31–#33/#35
-cobrem integração das mutações, confirmações e tools; não estão comprovadas aqui.
+#30 cobre geração de janelas e seus testes funcionais completos. #31 cobre a
+criação transacional; #32/#33/#35 cobrem as demais integrações, confirmações e
+tools, que não estão comprovadas aqui.
 
 ## 7. Retorno
 

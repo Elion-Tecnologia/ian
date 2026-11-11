@@ -10,6 +10,7 @@ using Ian.Application.Telegram;
 using Ian.Application.AI;
 using Ian.Application.Catalogo;
 using Ian.Application.Clientes;
+using Ian.Application.Agenda;
 using Ian.Infrastructure.AI;
 
 namespace Ian.Infrastructure;
@@ -76,6 +77,10 @@ public static class DependencyInjection
 
         services.AddScoped<TelegramBusinessOperationExecutor>();
         services.AddScoped<AgendaMutationExecutor>();
+        services.AddScoped<IAgendaMutationExecutor>(provider =>
+            provider.GetRequiredService<AgendaMutationExecutor>());
+        services.AddScoped<IAgendaCriacaoStore, PostgresAgendaCriacaoStore>();
+        services.AddScoped<ICriacaoAgendamento, CriacaoAgendamentoApplication>();
         services.AddScoped<ITipoServicoCatalogo, PostgresTipoServicoCatalogo>();
         services.AddScoped<IClienteStore, PostgresClienteStore>();
         services.AddScoped<IClientes, ClientesApplication>();
