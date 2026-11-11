@@ -7,9 +7,11 @@
 
 ## 1. Objetivo
 
-O IA.N é um sistema de gestão de agendas para uma loja de
-móveis planejados, operado por uma administradora por meio
-do Telegram.
+O IA.N gerencia uma única agenda de uma loja de móveis planejados,
+operada exclusivamente por uma administradora em conversa privada no
+Telegram, somente por texto. O MVP não inclui equipes, grupos, jornadas
+excepcionais, folgas, bloqueios administrativos, resumo automático,
+prorrogação manual, reabertura ou dashboards.
 
 A aplicação deve interpretar solicitações em linguagem
 natural, executar operações autorizadas e preservar a
@@ -18,9 +20,9 @@ consistência dos dados e das agendas.
 Este documento descreve a arquitetura aprovada, os
 componentes existentes e as responsabilidades técnicas.
 
-A base da integração textual da #19 foi consultada na branch `dev`,
-commit `7a3d969`, em 10/11/2026. A implementação descrita na seção 6
-foi verificada em `feature/maf-gemini`, com os dois smokes reais aprovados.
+A base consultada é `origin/dev`, commit `207be7a`, em 10/11/2026.
+A #78 remove a preparação de voz dessa base; a #79 acompanha a futura
+migração do modelo legado. Nenhuma alteração de esquema integra a #78.
 
 As funcionalidades descritas como planejadas não devem
 ser consideradas implementadas sem verificação no código.
@@ -123,7 +125,7 @@ Responsável por:
 - Invariantes e validações de negócio.
 - Comportamentos independentes de tecnologia.
 
-Entidades existentes em `Ian.Domain/Entities/`:
+Entidades existentes em `Ian.Domain/Entities/` (modelo legado, ainda sem a migração do MVP):
 
 - Cliente
 - Equipe
@@ -250,8 +252,12 @@ da administradora são controles independentes.
 Somente o Telegram User ID autorizado pode executar
 operações administrativas.
 
-Eventos de grupos não concedem autorização
-administrativa.
+Somente mensagens com texto não vazio em chat privado, de remetente humano
+com o ID autorizado, chegam ao handler administrativo. Mídia e legendas
+não são comandos. Os metadados voice/audio não são projetados pelo parser.
+Eventos de grupos não concedem autorização administrativa; a descoberta
+legada de candidatos ainda existe tecnicamente, sem vínculo ou envio, e
+será removida na #79.
 
 ### 5.3 Processamento existente
 
@@ -288,36 +294,6 @@ Portanto, a infraestrutura de recebimento e
 processamento existe, mas o fluxo funcional completo
 do agente ainda não está concluído.
 
-### 5.5 Preparação da entrada de voz (T09)
-
-A issue #17 adiciona os contratos `ITelegramVoiceFileClient`,
-`IVoiceTranscriber` e `ITelegramVoiceFeedback` em Application.
-`TelegramVoiceUpdateHandler` é um decorator do contrato administrativo
-existente, sem dependência de SDK e sem acesso ao banco.
-
-Ele reaplica a autorização, valida metadados e limites, obtém o áudio,
-solicita uma transcrição tipada e encaminha somente texto aceito ao
-handler textual. Falhas e necessidade de esclarecimento não alcançam
-esse handler. O adaptador real deve validar o conteúdo e sua duração
-efetiva; metadados Telegram não substituem essa validação.
-
-Infrastructure registra `TelegramVoiceFileClient` para download e
-fallback textual, e `TelegramVoiceOptions` com validação no startup.
-O transporte usa host fixo, rejeita caminhos de arquivo inválidos e
-desabilita redirecionamentos e handlers de logging de requisições,
-pois URLs Telegram incluem o token do bot.
-
-O áudio permanece apenas em buffers limitados em memória, zerados
-após o uso. Não há retenção de áudio nem temporários em disco.
-
-O decorator não está registrado no dispatcher, e não existe um
-`IVoiceTranscriber` real registrado. A ativação aguarda a entrega da
-#19 e a validação do provedor, conforme decisão de escopo da #17.
-Os testes com fakes e HTTP local não comprovam transcrição real nem
-a proteção de mutações por ferramentas futuras do agente.
-
-Ver `docs/spikes/voz.md` para evidências e passos de integração.
-
 ## 6. Integração com inteligência artificial
 
 ### 6.1 Tecnologias aprovadas
@@ -334,8 +310,7 @@ Google.GenAI 2.0.0, com Microsoft.Extensions.AI 10.11.0 transitivo.
 O modelo escolhido pelo usuário é `gemini-3.1-flash-lite`. O acesso e o
 Function Calling básico na conta foram validados nos dois smokes reais
 autorizados de 10/11/2026, usando somente conteúdo sintético.
-A estratégia de áudio permanece pendente; não há transcritor real
-nem substituição dos handlers Telegram nesta implementação.
+A integração é textual e ainda não substitui os handlers Telegram provisórios.
 
 O contrato retorna texto/uso ou falha tipada, sem tipos dos SDKs.
 O chamador deve validar autorização antes de invocá-lo. Cada chamada
@@ -399,37 +374,53 @@ As migrations ficam em:
 
 `Ian.Infrastructure/Persistence/Migrations/`
 
-### 7.2 Modelo de agendas
+### 7.2 Modelo implementado e proposta do MVP
 
-Agendamento representa o compromisso e seus
-dados de negócio.
+O código ainda mapeia `Agendamento.EquipeId`, `Equipe`,
+`ExcecaoExpediente` e `BloqueioAgenda.EquipeId`. Essas estruturas não
+representam o novo escopo aprovado. Nenhum serviço de cálculo ou caso de
+uso de agendamento está implementado; existem entidades e configurações EF.
 
-PeriodoOcupacao representa os intervalos
-efetivamente reservados.
+A proposta final de `Agendamento` preserva Id, ClienteId, TipoServicoId,
+Modalidade, Duracao, UnidadeDuracao, InicioPrevistoUtc, FimPrevistoUtc,
+EnderecoSnapshot, Observacoes e Estado; remove EquipeId e acrescenta
+Versao (long, padrão 1, token de concorrência). Não haverá entidade Agenda
+nem AgendaId para uma única agenda.
 
-Essa separação permite representar serviços
-que ocupam múltiplos dias e horários específicos.
+`PeriodoOcupacao` já não possui EquipeId: mantém Id, AgendamentoId,
+InicioUtc e FimUtc e a cardinalidade 1:N. Cada intervalo representa
+ocupação efetiva `[início,fim)` na única agenda. O expediente proposto é
+fixo, 08h–18h em America/Sao_Paulo, todos os dias. Dias corridos contam
+as datas consecutivas com janelas completas 08h–18h, inclusive na primeira
+data. Sete dias são sete janelas completas. Horário informado diferente de
+08h exige esclarecimento, sem criar período parcial ou corrigir a intenção
+por inferência. A duração em minutos mantém seus horários próprios.
+BloqueioAgenda será arquivada e retirada do modelo ativo somente na #79;
+não haverá operação administrativa de bloqueio no MVP.
 
-ExcecaoExpediente define alterações na jornada
-de uma equipe em determinada data.
+A migração deve preservar equipes antigas, seus vínculos, exceções e o
+escopo dos bloqueios em arquivo legado antes da retirada do modelo ativo.
+O plano com entidades, FKs, índices, pré-validação e retorno está em
+[docs/planejamento/migracao-agenda-unica.md](planejamento/migracao-agenda-unica.md).
+**Proposta para revisão; não implementada nem executada nesta entrega.**
 
-BloqueioAgenda representa indisponibilidade e
-não deve ser confundido com redução de jornada.
+### 7.3 Concorrência proposta
 
-As regras detalhadas estão no DRS.
+O banco atual possui checks de intervalo, FKs e índices, mas não uma
+constraint de exclusão de sobreposições. A agenda única exigirá que todos
+os casos de uso que criem ou alterem reservas adquiram o mesmo
+`pg_advisory_xact_lock` antes de consultar conflitos e gravar, na mesma
+transação READ COMMITTED. A consulta após adquirir o lock considera
+ocupações de agendamentos Agendados. O protocolo proposto serializa criar,
+editar, reagendar, concluir e cancelar, evitando corridas entre reservas.
+Bloqueios legados exigem reconciliação na migração, sem nova funcionalidade
+de bloqueio no MVP.
 
-### 7.3 Concorrência
-
-Não basta consultar disponibilidade antes
-de inserir um agendamento.
-
-Operações concorrentes devem preservar a
-invariante de ausência de sobreposição para
-a mesma equipe.
-
-A estratégia física completa de concorrência
-para agendamentos permanece uma pendência
-técnica do DRS.
+Versao evita sobrescrever edições e consumir confirmações obsoletas.
+Todas as mutações devem usar o protocolo; SQL administrativo fora dele
+não recebe essa garantia. Testes PostgreSQL de duas conexões são obrigatórios.
+O protocolo ainda não foi implementado, e uma consulta prévia sem lock
+não constitui proteção concorrente.
 
 ### 7.4 Transações
 
@@ -466,25 +457,18 @@ devidamente justificada.
 Integrações externas não devem presumir
 garantia absoluta de execução exatamente uma vez.
 
-## 9. Processamentos periódicos
+## 9. Consultas e respostas sob demanda
 
-A arquitetura prevê serviços periódicos
-hospedados no processo da API.
+O MVP mantém consultas textuais da agenda e o envio normal de respostas
+no privado da administradora. A #47 formata os resultados; #18/#51 tratam
+transporte, persistência e recuperação dos envios, sem depender de um
+agendador de resumos. Falha de sendMessage não pode ser relatada como entrega.
 
-O resumo diário deverá ser executado às
-07h50, no fuso `America/Sao_Paulo`.
-
-Ele deverá:
-
-- Considerar as equipes e serviços do dia.
-- Incluir serviços prolongados em execução.
-- Não enviar mensagem sem serviços Agendados.
-- Registrar sua execução.
-- Evitar duplicidade após reinicializações.
-
-O agendador e seu controle persistente de
-execução ainda não estão implementados na
-versão consultada.
+O resumo automático às 07h50 (#50) foi retirado em 11/11/2026. Não haverá
+serviço de resumo ou controle de execução desse job no MVP. O BackgroundService
+da inbox e a recuperação de respostas permanecem parte da arquitetura.
+Prorrogação manual (#40) fica pós-MVP; #35/#45 abrangem somente as operações
+de estado incluídas na lista criar, consultar, editar, reagendar, concluir e cancelar.
 
 ## 10. Configurações e credenciais
 

@@ -218,17 +218,16 @@ da conta, qualidade em cenários de negócio e transcrição de áudio não
 foram validados. A PR #76 permanece Draft com `Refs #19`, para revisão do
 usuário e enquanto os sete testes PostgreSQL seguem sem execução.
 
-## Relação com a #17
+## MVP textual — revisão de escopo
 
-Não foram alterados o webhook, autorização, handlers provisórios ou o
-fluxo de voz. O futuro handler textual autorizado poderá consumir `IAiModel`
-depois do gate backend. A futura transcrição deverá usar o contrato
-próprio `IVoiceTranscriber` e validar áudio/qualidade antes de encaminhar
-texto ao mesmo fluxo autorizado. Esta interface textual não aceita
-áudio, não implementa o transcritor e não garante validações de negócio.
-Ver [spike de voz](voz.md).
+A #19 foi integrada em dev. O MVP aprovado em 10/11/2026 usa agenda única
+e texto privado da administradora. A #17 foi encerrada como Not planned,
+a PR #77 fechada sem merge e a #78 remove a preparação antiga de mídia.
+A integração textual IAiModel/GeminiAiModel/GeminiChatClientFactory é
+preservada integralmente. As evidências desta página são históricas;
+não autorizam novos envios ao provedor.
 
-## Validação e revisão
+## Validação e revisão — registro histórico da #19
 
 Comandos finais executados na raiz:
 

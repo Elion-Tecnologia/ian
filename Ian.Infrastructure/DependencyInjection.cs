@@ -50,24 +50,6 @@ public static class DependencyInjection
                 "Telegram:WebhookSecret deve conter de 1 a 256 caracteres entre A-Z, a-z, 0-9, _ e -.")
             .ValidateOnStart();
 
-        services.AddOptions<TelegramVoiceOptions>()
-            .Configure(options => ReadTelegramVoiceOptions(options, configuration))
-            .Validate(options => options.ToLimits().IsValid(),
-                "TelegramVoice: limites de tamanho, duração ou timeout inválidos.")
-            .ValidateOnStart();
-
-        services.AddSingleton(provider => new TelegramVoiceFileClient(
-            new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
-            {
-                Timeout = Timeout.InfiniteTimeSpan
-            },
-            provider.GetRequiredService<IOptions<TelegramOptions>>(),
-            provider.GetRequiredService<IOptions<TelegramVoiceOptions>>()));
-        services.AddSingleton<ITelegramVoiceFileClient>(provider =>
-            provider.GetRequiredService<TelegramVoiceFileClient>());
-        services.AddSingleton<ITelegramVoiceFeedback>(provider =>
-            provider.GetRequiredService<TelegramVoiceFileClient>());
-
         services.AddDbContext<IanDbContext>(options =>
         {
             options.UseNpgsql(ReadPostgresConnectionString(configuration));
@@ -109,24 +91,6 @@ public static class DependencyInjection
 
         return services;
     }
-    private static void ReadTelegramVoiceOptions(
-        TelegramVoiceOptions options,
-        IConfiguration configuration)
-    {
-        var section = configuration.GetSection(TelegramVoiceOptions.SectionName);
-        options.MaxBytes = ReadInteger(nameof(options.MaxBytes), options.MaxBytes);
-        options.MaxDurationSeconds = ReadInteger(nameof(options.MaxDurationSeconds), options.MaxDurationSeconds);
-        options.TimeoutSeconds = ReadInteger(nameof(options.TimeoutSeconds), options.TimeoutSeconds);
-
-        int ReadInteger(string name, int defaultValue)
-        {
-            var value = section[name];
-            return value is null ? defaultValue :
-                int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-                    ? parsed : 0;
-        }
-    }
-
     private static string ReadPostgresConnectionString(IConfiguration configuration)
     {
         const string key = "ConnectionStrings:Default";

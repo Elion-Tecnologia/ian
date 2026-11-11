@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Ian.Application.Telegram;
 using Ian.Infrastructure.Telegram;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -46,6 +47,43 @@ public sealed class TelegramInboxProcessingTests
 
         Assert.Equal("Completed", store.GetState(102));
         Assert.Equal("NonCommandEvent", store.GetResult(102));
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData("voice", false)]
+    [InlineData("voice", true)]
+    [InlineData("audio", false)]
+    [InlineData("audio", true)]
+    public async Task MediaNeverExecutesCommandsForProjectedOrPreviouslyStoredUpdates(string media, bool project)
+    {
+        // A legacy inbox row can still contain media metadata after this deployment.
+        var payload = JsonSerializer.Serialize(new
+        {
+            update_id = 103,
+            message = new Dictionary<string, object>
+            {
+                ["message_id"] = 17,
+                ["from"] = new { id = 42, is_bot = false },
+                ["chat"] = new { id = 42, type = "private" },
+                [media] = new { file_id = "synthetic", duration = 1 },
+                ["caption"] = "Cancelar agendamento"
+            }
+        });
+        if (project)
+        {
+            using var json = JsonDocument.Parse(payload);
+            Assert.True(TelegramUpdateParser.TryParse(json.RootElement, out var update));
+            payload = update!.PayloadJson;
+        }
+        var store = new FakeStore();
+        store.Add(103, payload);
+        var handler = new TestAuthorizedHandler();
+
+        Assert.True(await CreateConsumer(store, handler).ProcessNextAsync(default));
+
+        Assert.Equal("Completed", store.GetState(103));
+        Assert.Equal("NonCommandEvent", store.GetResult(103));
         Assert.Equal(0, handler.Calls);
     }
 

@@ -19,7 +19,6 @@ public sealed class GeminiConfigurationTests
         Assert.Same(model, services.GetRequiredService<IAiModel>());
         Assert.IsType<GeminiAiModel>(model);
         Assert.IsType<DeferredTelegramHandlers>(services.GetRequiredService<ITelegramAuthorizedUpdateHandler>());
-        Assert.Null(services.GetService<IVoiceTranscriber>());
 
         var result = await model.InvokeAsync("synthetic prompt");
         Assert.Equal(AiModelFailure.InvalidConfiguration, result.Failure);
