@@ -94,80 +94,49 @@ Os endereços HTTP/HTTPS disponíveis aparecem no terminal. O console registra s
 5. Abrir um Pull Request para `dev`.
 6. Revisar e integrar as alterações após aprovação.
 
-### 5. Configurar PostgreSQL e executar migrations
+### 5. PostgreSQL, migrations e segurança dos testes
 
-Use um servidor PostgreSQL local. No macOS, se ainda precisar instalá-lo, rode:
+Configure ConnectionStrings:Default em User Secrets de Ian.Api ou na variável
+ConnectionStrings__Default, sem publicar credenciais. Antes de aplicar migrations,
+identifique o destino, inventarie dados, faça backup completo e ensaie restauração.
+Leia o [procedimento da #79](docs/planejamento/migracao-agenda-unica.md).
 
-```bash
-brew install postgresql@17
-brew services start postgresql@17
-export PATH="$(brew --prefix postgresql@17)/bin:$PATH"
-```
+A origem de desenvolvimento ian_t03_tmp contém registros técnicos e não é
+descartável. Não aplicar novas migrations nela sem autorização específica.
+A #79 foi validada com PostgreSQL 17.11 e bancos isolados. Seus Down recusam
+retorno automático; não utilizar database update 0 como procedimento de rollback.
 
-Crie um banco descartável chamado `ian_t03_tmp` para validar as migrations. Use o nome do seu usuário local do PostgreSQL no lugar de `usuario_local`:
+Para gerar SQL revisável sem aplicar ao banco:
 
-```bash
-createdb -h 127.0.0.1 -p 5432 -U usuario_local ian_t03_tmp
-```
-
-No Windows, se `createdb` estiver fora do `PATH`, execute `createdb.exe` pelo caminho completo da pasta `bin` da sua instalação.
-
-Em `Development`, cadastre `ConnectionStrings:Default` nos User Secrets do projeto `Ian.Api`. A string abaixo mostra o formato com valores fictícios:
-
-```text
-Host=127.0.0.1;Port=5432;Database=ian_t03_tmp;Username=usuario_local;Password=senha_ficticia
-```
-
-A variável de ambiente `ConnectionStrings__Default` também pode fornecer a conexão. Guarde as credenciais reais fora do repositório.
-
-Da raiz da solução, restaure a ferramenta local e aplique as migrations:
-
-```bash
+```powershell
 dotnet tool restore
-dotnet ef database update --project Ian.Infrastructure --startup-project Ian.Api --context IanDbContext -- --environment Development
+dotnet ef migrations script 20261110155523_TelegramInboxProcessing --project Ian.Infrastructure --startup-project Ian.Api --output migration-review.sql
 ```
 
-Para testar o rollback até antes da primeira migration, confirme que a conexão aponta para o banco descartável e rode:
+Revise o SQL e confirme a conexão de destino antes de qualquer aplicação.
+Não iniciar a API de teste apontando para a origem: o consumidor da inbox escreve.
 
-```bash
-dotnet ef database update 0 --project Ian.Infrastructure --startup-project Ian.Api --context IanDbContext -- --environment Development
-```
+### 6. Modelo de dados implementado — agenda única
 
-Depois, execute novamente o comando de aplicação. Para conferir o ciclo, consulte o histórico após cada etapa:
-
-```sql
-SELECT "MigrationId", "ProductVersion"
-FROM public."__EFMigrationsHistory";
-```
-
-Com apenas a migration `InitialDatabase`, o histórico deve mostrar uma linha após aplicar, zero após reverter e uma após reaplicar.
-
-Em caso de falha de conexão, confira se o serviço do PostgreSQL está rodando e verifique host, porta, banco e usuário. Ao compartilhar o diagnóstico, mantenha a string de conexão fora da mensagem.
-
-### 6. Modelo de dados implementado — legado em transição
-
-A tabela abaixo descreve o esquema existente, não o modelo final do MVP.
-Nesta entrega nenhum arquivo Domain, mapeamento EF Core ou migration foi alterado.
-O novo `Agendamento` não terá `EquipeId`. A migração incremental e a preservação
-de dados serão revisadas na #79 antes de qualquer execução. Consulte o
-[plano detalhado](docs/planejamento/migracao-agenda-unica.md) e o
-[backlog revisado](docs/planejamento/mvp-agenda-unica.md).
-
-| Tabela | Chaves, cardinalidade e regras |
+| Tabela ativa | Regras |
 | --- | --- |
-| `clientes` | Telefone normalizado obrigatório, preenchido e único. Endereço principal opcional. |
-| `equipes` | Nome e situação ativa/inativa. Vínculo com grupo Telegram opcional. |
-| `tipos_servico` | Duração padrão positiva, com unidade em minutos ou dias corridos, e modalidade padrão interna, externa ou remota. |
-| `agendamentos` | FKs obrigatórias para cliente, equipe e tipo de serviço. Período previsto em UTC e estados Agendado, Concluido ou Cancelado. Endereço preservado como snapshot, obrigatório para serviço externo. Índice por equipe e estado. |
-| `periodos_ocupacao` | Um agendamento pode ter vários períodos. Cada período tem início e fim em UTC, com índice por agendamento e início. |
-| `excecoes_expediente` | Uma exceção por equipe e data local. Representa uma folga integral ou uma janela de jornada no horário local. |
-| `bloqueios_agenda` | Legado fora do MVP: intervalo UTC e EquipeId opcional. Sua retirada do modelo ativo ocorrerá na #79, preservando dados e relações históricas. |
-| `solicitacoes_pendentes` | Operação, usuário do Telegram, estado, criação e expiração em UTC. Índice por usuário, estado e expiração. |
-| `registros_auditoria` | Operação, resultado, correlação e instante em UTC. Vínculo opcional com agendamento. Índices por correlação e por agendamento e instante. |
-| `envios_telegram` | Destino, tipo de mensagem, estado, tentativas e instantes em UTC. Índice por estado e criação. |
+| clientes | Telefone normalizado obrigatório e único; endereço principal opcional. |
+| tipos_servico | Duração/unidade/modalidade padrão; seed pertence à #24. |
+| agendamentos | Cliente e serviço obrigatórios; sem equipe; Versao >=1 como token EF; estado e endereço snapshot preservados. |
+| periodos_ocupacao | Relação 1:N com agendamento; intervalos UTC semiabertos; sem recálculo na migração. |
+| registros_auditoria | Histórico com FK restritiva para agendamento. |
+| solicitacoes_pendentes / envios_telegram | Contexto e histórico técnico preservados. |
+| telegram_updates_inbox / telegram_business_operations | Recebimento durável, recuperação e idempotência preservados. |
 
-As dez tabelas usam chaves primárias `bigint`. As chaves estrangeiras usam `ON DELETE RESTRICT` para preservar registros vinculados. A migration `DomainModel` é incremental sobre `InitialDatabase`.
+As novas migrations PrepararAgendaUnica e ConsolidarAgendaUnica movem equipes,
+exceções e bloqueios para legado_mvp, preservando PKs, FKs, dados e sequences.
+Um snapshot de preparação e o mapa AgendamentoId→EquipeId mantêm rastreabilidade.
+As quatro migrations anteriores permanecem intactas; não há DropTable no upgrade.
 
+AgendaMutationExecutor integra a transação idempotente com advisory lock global.
+Os futuros callbacks devem reler estado, validar conflitos/confirmação e chamar
+IncrementarVersao(), inclusive ao modificar somente ocupações. Não há caso de uso
+de agendamento implementado por esse executor. O motor de períodos pertence à #30.
 ### Integração contínua
 
 O fluxo do repositório é `feature/*` → `dev` → `main`. As tarefas entram em `dev` por Pull Request. A `main` recebe versões após homologação.
@@ -237,9 +206,7 @@ Chamadas externas, como envios pela Telegram Bot API, não participam da transa�
 
 Enquanto não houver processamento real de comandos, atualizações administrativas textuais autorizadas são preservadas em `FailedPaused` com `HandlerUnavailable`.
 Mensagens sem texto, inclusive mídia com legenda, não executam comandos. O parser
-não persiste metadados de voz ou áudio. O contrato técnico legado de candidatos
-a grupo permanece provisoriamente no código, sem executar comandos nem vincular
-grupos; sua retirada está planejada na #79.
+não persiste metadados de voz ou áudio. Os contratos e projeções exclusivos de associação de grupos foram removidos na #79. Eventos de grupos, inclusive históricos, são negados sem executar comandos.
 
 Nenhum comando é executado por um handler provisório.
 
@@ -255,9 +222,17 @@ Logs não incluem payloads, conteúdo de mensagens, telefones, endereços, token
 
 Testes unitários verificam consumo, duplicidade, expiração do lease, retry, autorização e preservação das mensagens pendentes.
 
-Testes de integração PostgreSQL usam exclusivamente um banco descartável e a variável de ambiente `IAN_TEST_POSTGRES_CONNECTION_STRING`.
+Testes PostgreSQL exigem IAN_TEST_POSTGRES_CONNECTION_STRING apontando para host
+loopback e banco com nome ian_t<numero>_tests (por exemplo, ian_t79_tests).
+IAN_TEST_POSTGRES_DATABASE deve conter exatamente esse nome, confirmando o destino.
+A conexão vem de fonte privada; nunca publicar seu valor. A proteção também se
+aplica aos testes antigos, que apagam a inbox. A suíte de migração recria schemas
+somente nesse destino validado. Nunca usar ian_t03_tmp ou a cópia de restauração.
 
-Sem essa variável, os testes de integração são ignorados, não considerados validados.
+Sem conexão, testes PostgreSQL são ignorados; com destino inseguro, falham antes
+de conectar. Executar restore, build Release e test Release. Deixar
+IAN_RUN_GEMINI_SMOKE e IAN_ALLOW_GEMINI_QUOTA desativados para evitar chamadas reais.
+Evidências da #79 em docs/planejamento/validacao-agenda-unica.md.
 
 ## Integração MAF/Gemini (T11)
 
@@ -319,8 +294,7 @@ Em 10/11/2026, os dois smokes reais autorizados passaram com
 21475 ms, e o uso informado totalizou 219 tokens. As variáveis temporárias
 foram removidas. Isso valida acesso e Function Calling básico nessa conta;
 não valida qualidade de negócio ou limites de quota/faturamento.
-A #19 foi integrada em dev; os sete testes PostgreSQL continuam documentados
-como não executados na ausência de banco descartável configurado.
+A #19 foi integrada em dev. Os testes PostgreSQL foram posteriormente executados em banco descartável na #79; os smokes Gemini não foram repetidos nessa entrega.
 
 Detalhes técnicos, limites e evidências em
 [docs/spikes/maf-gemini.md](docs/spikes/maf-gemini.md).

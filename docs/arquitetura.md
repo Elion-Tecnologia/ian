@@ -20,9 +20,7 @@ consistência dos dados e das agendas.
 Este documento descreve a arquitetura aprovada, os
 componentes existentes e as responsabilidades técnicas.
 
-A base consultada é `origin/dev`, commit `207be7a`, em 10/11/2026.
-A #78 remove a preparação de voz dessa base; a #79 acompanha a futura
-migração do modelo legado. Nenhuma alteração de esquema integra a #78.
+Base: dev da48cfd (PR #80). A #79 implementa o modelo único e migrations incrementais, validadas somente em bancos isolados. A origem ian_t03_tmp não foi migrada.
 
 As funcionalidades descritas como planejadas não devem
 ser consideradas implementadas sem verificação no código.
@@ -125,15 +123,12 @@ Responsável por:
 - Invariantes e validações de negócio.
 - Comportamentos independentes de tecnologia.
 
-Entidades existentes em `Ian.Domain/Entities/` (modelo legado, ainda sem a migração do MVP):
+Entidades existentes em `Ian.Domain/Entities/` (modelo ativo da #79):
 
 - Cliente
-- Equipe
 - TipoServico
 - Agendamento
 - PeriodoOcupacao
-- ExcecaoExpediente
-- BloqueioAgenda
 - SolicitacaoPendente
 - RegistroAuditoria
 - EnvioTelegram
@@ -255,9 +250,7 @@ operações administrativas.
 Somente mensagens com texto não vazio em chat privado, de remetente humano
 com o ID autorizado, chegam ao handler administrativo. Mídia e legendas
 não são comandos. Os metadados voice/audio não são projetados pelo parser.
-Eventos de grupos não concedem autorização administrativa; a descoberta
-legada de candidatos ainda existe tecnicamente, sem vínculo ou envio, e
-será removida na #79.
+Eventos de grupos são negados, inclusive payloads históricos de associação. Candidatos, handlers exclusivos, projeções de associação e DI de grupos foram removidos na #79. A inbox histórica não é reescrita.
 
 ### 5.3 Processamento existente
 
@@ -374,62 +367,51 @@ As migrations ficam em:
 
 `Ian.Infrastructure/Persistence/Migrations/`
 
-### 7.2 Modelo implementado e proposta do MVP
+### 7.2 Modelo ativo e arquivo histórico
 
-O código ainda mapeia `Agendamento.EquipeId`, `Equipe`,
-`ExcecaoExpediente` e `BloqueioAgenda.EquipeId`. Essas estruturas não
-representam o novo escopo aprovado. Nenhum serviço de cálculo ou caso de
-uso de agendamento está implementado; existem entidades e configurações EF.
+Agendamento preserva identidade, cliente, serviço, modalidade, duração/unidade,
+início/fim previstos, endereço snapshot, observações e estado. Não possui EquipeId
+ou AgendaId. Versao é long >=1, default 1, token de concorrência EF; o método
+IncrementarVersao() deve ser chamado explicitamente nas mutações relevantes.
+PeriodoOcupacao mantém Id, AgendamentoId, InicioUtc/FimUtc e relação 1:N.
 
-A proposta final de `Agendamento` preserva Id, ClienteId, TipoServicoId,
-Modalidade, Duracao, UnidadeDuracao, InicioPrevistoUtc, FimPrevistoUtc,
-EnderecoSnapshot, Observacoes e Estado; remove EquipeId e acrescenta
-Versao (long, padrão 1, token de concorrência). Não haverá entidade Agenda
-nem AgendaId para uma única agenda.
+Equipe, ExcecaoExpediente e BloqueioAgenda não estão no Domain/DbContext ativo.
+As migrations PrepararAgendaUnica e ConsolidarAgendaUnica preservam snapshots,
+mapa de equipe antiga, tabelas originais, chaves e sequences em legado_mvp.
+As quatro migrations históricas não mudaram. Não há DropTable no upgrade.
+Os Down novos recusam retorno automático para não inventar equipe nem perder dados.
 
-`PeriodoOcupacao` já não possui EquipeId: mantém Id, AgendamentoId,
-InicioUtc e FimUtc e a cardinalidade 1:N. Cada intervalo representa
-ocupação efetiva `[início,fim)` na única agenda. O expediente proposto é
-fixo, 08h–18h em America/Sao_Paulo, todos os dias. Dias corridos contam
-as datas consecutivas com janelas completas 08h–18h, inclusive na primeira
-data. Sete dias são sete janelas completas. Horário informado diferente de
-08h exige esclarecimento, sem criar período parcial ou corrigir a intenção
-por inferência. A duração em minutos mantém seus horários próprios.
-BloqueioAgenda será arquivada e retirada do modelo ativo somente na #79;
-não haverá operação administrativa de bloqueio no MVP.
+A origem existente não foi migrada. Backup/restauração e inventário foram
+comprovados; novas migrations foram exercitadas somente em bases isoladas.
+Procedimento e limites em [plano de migração](planejamento/migracao-agenda-unica.md).
 
-A migração deve preservar equipes antigas, seus vínculos, exceções e o
-escopo dos bloqueios em arquivo legado antes da retirada do modelo ativo.
-O plano com entidades, FKs, índices, pré-validação e retorno está em
-[docs/planejamento/migracao-agenda-unica.md](planejamento/migracao-agenda-unica.md).
-**Proposta para revisão; não implementada nem executada nesta entrega.**
+### 7.3 Concorrência e transações
 
-### 7.3 Concorrência proposta
+TelegramBusinessOperationExecutor possui a transação READ COMMITTED e a barreira
+(UpdateId, OperationKey); rejeita transações aninhadas e mudanças pendentes.
+AgendaMutationExecutor compõe esse executor e adquire PostgresAgendaLock antes
+do callback. Ordem: transação → idempotência → lock global (790,1) → leitura
+atualizada → validações/mutações/auditoria → commit. Rollback limpa o rastreamento.
+O lock tem timeout de 5 segundos; não há retry automático de escrita.
 
-O banco atual possui checks de intervalo, FKs e índices, mas não uma
-constraint de exclusão de sobreposições. A agenda única exigirá que todos
-os casos de uso que criem ou alterem reservas adquiram o mesmo
-`pg_advisory_xact_lock` antes de consultar conflitos e gravar, na mesma
-transação READ COMMITTED. A consulta após adquirir o lock considera
-ocupações de agendamentos Agendados. O protocolo proposto serializa criar,
-editar, reagendar, concluir e cancelar, evitando corridas entre reservas.
-Bloqueios legados exigem reconciliação na migração, sem nova funcionalidade
-de bloqueio no MVP.
+Versão obsoleta e indisponibilidade do lock são falhas tipadas e sanitizadas.
+O callback futuro deve comparar a versão esperada, revalidar confirmação e conflitos,
+e incrementar Versao também quando apenas ocupações mudarem. O token EF detecta
+UPDATE com versão original obsoleta; não implementa confirmação conversacional.
 
-Versao evita sobrescrever edições e consumir confirmações obsoletas.
-Todas as mutações devem usar o protocolo; SQL administrativo fora dele
-não recebe essa garantia. Testes PostgreSQL de duas conexões são obrigatórios.
-O protocolo ainda não foi implementado, e uma consulta prévia sem lock
-não constitui proteção concorrente.
+Testes com duas conexões comprovam serialização, releitura após commit,
+versão obsoleta, rollback, timeout e idempotência. São testes de infraestrutura.
+Não existe constraint de exclusão: todos os caminhos de escrita devem respeitar
+o protocolo; SQL manual que o ignore não é protegido.
 
-### 7.4 Transações
+### 7.4 Limite da #79
 
-Operações de negócio que precisam ser atômicas
-devem utilizar transações adequadas.
-
-O sistema não deve confirmar resultados parciais
-como operações concluídas.
-
+A #30 implementará o motor determinístico, jornada fixa 08h–18h todos os dias em
+America/Sao_Paulo e geração de janelas em minutos/dias corridos. As verificações
+da migration apenas recusam legado incompatível, sem recalcular ocupações.
+Os casos de uso #31–#33/#35 e as tools ainda precisam integrar concorrência,
+disponibilidade, autorização, confirmação e auditoria. Não estão implementados
+por esta infraestrutura.
 ## 8. Idempotência e recuperação
 
 O recebimento utiliza `update_id` para identificar

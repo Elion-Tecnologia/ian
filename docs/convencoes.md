@@ -531,6 +531,8 @@ configuração de ambiente:
 
 `IAN_TEST_POSTGRES_CONNECTION_STRING`
 
+A variável IAN_TEST_POSTGRES_DATABASE deve confirmar o mesmo nome local ian_t<numero>_tests. Origem e cópia de restauração são recusadas antes de conectar.
+
 Esses testes devem operar somente sobre bancos
 de teste apropriados e isolados.
 

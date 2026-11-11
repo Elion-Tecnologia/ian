@@ -71,10 +71,12 @@ Quando uma implementação modificar contratos, decisões técnicas
 ou comportamentos documentados, identifique os documentos e
 exemplos de API que precisam ser atualizados.
 ## Transição para o MVP
-O modelo persistente legado ainda contém EquipeId, Equipe, ExcecaoExpediente
-e BloqueioAgenda. A retirada dessas estruturas do modelo ativo fica na #79,
-com preservação dos dados históricos; não alterar Domain/EF/migrations na #78.
-A proposta da agenda única está no DRS e em docs/planejamento/migracao-agenda-unica.md.
-Não confundir a proposta com implementação. A issue #79 acompanha a migração
-incremental, ainda não executada; preservar dados e histórico e nunca reescrever
-migrations aplicadas. A limpeza de voz é acompanhada pela #78.
+A #79 implementa Agendamento sem EquipeId, Versao e migrations incrementais
+que preservam equipes, exceções, bloqueios e vínculos antigos em legado_mvp.
+As quatro migrations históricas devem permanecer intactas. A origem ian_t03_tmp
+não foi migrada e exige autorização específica para qualquer alteração.
+#30 implementará o motor de ocupações; #31–#33/#35 integrarão os casos de uso.
+Testes de infraestrutura não comprovam esses fluxos funcionais.
+Testes PostgreSQL exigem conexão descartável local ian_t<numero>_tests e
+IAN_TEST_POSTGRES_DATABASE com o mesmo nome; nunca apontar para a origem
+ou a cópia de validação da restauração.
