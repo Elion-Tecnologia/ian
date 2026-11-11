@@ -349,6 +349,29 @@ Portanto, a infraestrutura de recebimento e
 processamento existe, mas o fluxo funcional completo
 do agente ainda não está concluído.
 
+### 5.5 Respostas textuais privadas
+
+`ITelegramTextSender` (#18) usa a projeção da inbox e a autorização existente,
+exigindo também que o chat de destino seja o privado da administradora. O host
+deve chamá-lo após a persistência da inbox e o commit de negócio aplicável.
+`TelegramTextClient` envia texto simples de até 4096 unidades UTF-16 ao endpoint
+HTTPS fixo `sendMessage`, com previews e redirecionamentos desabilitados.
+
+Por padrão, há timeout de 10 segundos por tentativa e 30 segundos para a operação
+completa, incluindo leitura da resposta e esperas. Apenas rejeição explícita 429
+com `parameters.retry_after` positivo autoriza repetição: no máximo três tentativas,
+com espera de até dez segundos, respeitando o prazo total. 401 e demais rejeições
+permanentes encerram o envio. 5xx, timeout, falha de transporte e resposta de sucesso
+inválida são resultados incertos e não geram repetição automática.
+
+O resultado informa status, número de tentativas, eventual prazo de espera e ID
+da mensagem aceita. Aceitação pela API não comprova entrega/leitura. Logs em nível
+Information incluem somente UpdateId, tentativa e status; token, URI autenticada,
+texto, destinatário, corpo da resposta e exceções do provedor não são registrados.
+O transporte é dedicado, sem handlers de logging do HttpClientFactory. O cliente
+não altera negócios nem o estado da inbox; integração textual e recuperação de
+saída persistente pertencem, respectivamente, à #44 e à #51.
+
 ## 6. Integração com inteligência artificial
 
 ### 6.1 Tecnologias aprovadas
@@ -555,6 +578,10 @@ Configurações existentes:
 - `Telegram:AdministratorUserId`
 - `Telegram:WebhookSecret`
 - `Telegram:PublicBaseUrl` (opcional)
+- `Telegram:Sending:RequestTimeoutSeconds` (opcional; padrão 10, faixa 1–30)
+- `Telegram:Sending:TotalTimeoutSeconds` (opcional; padrão 30, entre o timeout por tentativa e 60)
+- `Telegram:Sending:MaxAttempts` (opcional; padrão 3, faixa 1–3)
+- `Telegram:Sending:MaxRetryDelaySeconds` (opcional; padrão 10, faixa 1–30)
 - `ConnectionStrings:Default`
 - `Gemini:ApiKey` (secreta)
 - `Gemini:Model`

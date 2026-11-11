@@ -13,6 +13,8 @@ using Ian.Application.Clientes;
 using Ian.Application.Agenda;
 using Ian.Application.Conversation;
 using Ian.Infrastructure.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Ian.Infrastructure;
 
@@ -56,6 +58,27 @@ public static class DependencyInjection
             .Validate(options => IsValidWebhookSecret(options.WebhookSecret),
                 "Telegram:WebhookSecret deve conter de 1 a 256 caracteres entre A-Z, a-z, 0-9, _ e -.")
             .ValidateOnStart();
+
+        services.AddOptions<TelegramTextSendingOptions>()
+            .Configure(options =>
+            {
+                var sending = configuration.GetSection(TelegramTextSendingOptions.SectionName);
+                options.RequestTimeoutSeconds = ReadInt(sending, nameof(options.RequestTimeoutSeconds), options.RequestTimeoutSeconds);
+                options.TotalTimeoutSeconds = ReadInt(sending, nameof(options.TotalTimeoutSeconds), options.TotalTimeoutSeconds);
+                options.MaxAttempts = ReadInt(sending, nameof(options.MaxAttempts), options.MaxAttempts);
+                options.MaxRetryDelaySeconds = ReadInt(sending, nameof(options.MaxRetryDelaySeconds), options.MaxRetryDelaySeconds);
+            })
+            .Validate(options => options.IsValid(), "As opções Telegram:Sending são inválidas.")
+            .ValidateOnStart();
+        services.AddSingleton<ITelegramTextSender>(provider => new TelegramTextClient(
+            new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false })
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            },
+            provider.GetRequiredService<IOptions<TelegramOptions>>(),
+            provider.GetRequiredService<IOptions<TelegramTextSendingOptions>>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetService<ILogger<TelegramTextClient>>() ?? NullLogger<TelegramTextClient>.Instance));
 
         services.AddDbContext<IanDbContext>(options =>
         {
@@ -169,4 +192,8 @@ public static class DependencyInjection
     private static bool IsValidWebhookSecret(string secret) =>
         secret.Length is >= 1 and <= 256 &&
         secret.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-');
+
+    private static int ReadInt(IConfiguration section, string key, int fallback) =>
+        section[key] is not { } value ? fallback :
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
 }
