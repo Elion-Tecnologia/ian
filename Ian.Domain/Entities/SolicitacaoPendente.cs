@@ -16,6 +16,7 @@ public sealed class SolicitacaoPendente
     public string DadosColetadosJson { get; set; } = "{}";
     public string CamposFaltantesJson { get; set; } = "[]";
     public string CandidatosJson { get; set; } = "{}";
+    public string? ConfirmacaoJson { get; set; }
     public EstadoSolicitacaoPendente Estado { get; set; } = EstadoSolicitacaoPendente.Pendente;
     public required DateTimeOffset CriadaEmUtc { get; init; }
     public DateTimeOffset AtualizadaEmUtc { get; set; }

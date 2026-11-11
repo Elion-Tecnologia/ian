@@ -66,6 +66,8 @@ public static class DependencyInjection
         services.AddScoped<ITelegramUpdateInboxWriter,TelegramUpdateInboxWriter>();
         services.AddScoped<IPendingConversationRepository, PostgresPendingConversationRepository>();
         services.AddScoped<IPendingConversation, PendingConversationService>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<IOperationConfirmation, PostgresOperationConfirmation>();
 
         services.AddOptions<TelegramInboxProcessingOptions>()
             .Validate(

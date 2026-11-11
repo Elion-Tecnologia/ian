@@ -20,6 +20,7 @@ internal sealed class SolicitacaoPendenteConfiguration
             table.HasCheckConstraint("ck_solicitacoes_dados_objeto", "jsonb_typeof(\"DadosColetadosJson\") = 'object'");
             table.HasCheckConstraint("ck_solicitacoes_faltantes_array", "jsonb_typeof(\"CamposFaltantesJson\") = 'array'");
             table.HasCheckConstraint("ck_solicitacoes_candidatos_objeto", "jsonb_typeof(\"CandidatosJson\") = 'object'");
+            table.HasCheckConstraint("ck_solicitacoes_confirmacao_objeto", "\"ConfirmacaoJson\" IS NULL OR jsonb_typeof(\"ConfirmacaoJson\") = 'object'");
         });
 
         builder.HasKey(solicitacao => solicitacao.Id);
@@ -32,6 +33,7 @@ internal sealed class SolicitacaoPendenteConfiguration
         builder.Property(solicitacao => solicitacao.DadosColetadosJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.Property(solicitacao => solicitacao.CamposFaltantesJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
         builder.Property(solicitacao => solicitacao.CandidatosJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        builder.Property(solicitacao => solicitacao.ConfirmacaoJson).HasColumnType("jsonb");
         builder.Property(solicitacao => solicitacao.AtualizadaEmUtc).HasDefaultValueSql("now()");
 
         builder.HasIndex(solicitacao => new

@@ -97,6 +97,7 @@ public sealed class PostgresPendingConversationRepository(
         current!.DadosColetadosJson = collectedFieldsJson;
         current.CamposFaltantesJson = missingFieldsJson;
         current.CandidatosJson = candidateIdsJson;
+        current.ConfirmacaoJson = null;
         current.AtualizadaEmUtc = nowUtc;
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -137,6 +138,7 @@ public sealed class PostgresPendingConversationRepository(
         current.DadosColetadosJson = JsonSerializer.Serialize(collected, JsonOptions);
         current.CamposFaltantesJson = JsonSerializer.Serialize(missing, JsonOptions);
         current.CandidatosJson = JsonSerializer.Serialize(candidates, JsonOptions);
+        current.ConfirmacaoJson = null;
         current.AtualizadaEmUtc = nowUtc;
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

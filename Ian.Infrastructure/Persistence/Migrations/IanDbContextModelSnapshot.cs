@@ -263,6 +263,9 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .HasColumnType("jsonb")
                         .HasDefaultValueSql("'{}'::jsonb");
 
+                    b.Property<string>("ConfirmacaoJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<DateTimeOffset>("CriadaEmUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -299,6 +302,8 @@ namespace Ian.Infrastructure.Persistence.Migrations
                     b.ToTable("solicitacoes_pendentes", null, t =>
                         {
                             t.HasCheckConstraint("ck_solicitacoes_candidatos_objeto", "jsonb_typeof(\"CandidatosJson\") = 'object'");
+
+                            t.HasCheckConstraint("ck_solicitacoes_confirmacao_objeto", "\"ConfirmacaoJson\" IS NULL OR jsonb_typeof(\"ConfirmacaoJson\") = 'object'");
 
                             t.HasCheckConstraint("ck_solicitacoes_dados_objeto", "jsonb_typeof(\"DadosColetadosJson\") = 'object'");
 
