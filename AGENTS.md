@@ -42,28 +42,29 @@ em conversa privada no Telegram, somente por texto.
 
 ## Fluxo de trabalho
 1. Identifique a issue, seu escopo, dependências e critérios de aceite.
-2. Leia somente os documentos e arquivos pertinentes à implementação.
-3. Apresente um plano breve para alterações não triviais.
-4. Implemente a menor alteração coerente com a arquitetura existente.
-5. Adicione ou ajuste testes dos comportamentos afetados.
-6. Execute build e testes aplicáveis.
-7. Informe arquivos alterados, verificações executadas,
-   resultados e pendências.
+2. Investigue somente os documentos e arquivos relevantes; evite trabalho redundante.
+3. Crie `feature/*` a partir de `dev`.
+4. Implemente a menor alteração coerente com a arquitetura existente e adicione ou ajuste testes dos comportamentos afetados.
+5. Execute os testes automatizados pertinentes e corrija falhas; em seguida, execute o build.
+6. Faça commit, push e abra um Pull Request para `dev`.
+7. Aguarde os checks obrigatórios do GitHub passarem; não faça merge com testes falhando ou checks obrigatórios pendentes/reprovados.
+8. Faça squash merge e feche a issue.
 
 ## Restrições
 - Não ampliar o escopo da issue sem autorização.
 - Não adicionar dependências ou alterar contratos públicos sem justificativa.
 - Não inserir credenciais no código, nos logs ou na documentação.
-- Não executar commits, push ou merge sem solicitação explícita.
+- Uma solicitação explícita para executar uma issue completa autoriza commit, push, Pull Request e squash merge, sem aprovações intermediárias, respeitadas as permissões do ambiente.
+- Não realizar auditorias ou code reviews separados.
 - Não declarar testes como aprovados sem executá-los.
+- Não executar merge enquanto testes falharem ou checks obrigatórios estiverem pendentes ou reprovados.
 - Não modificar regras de negócio aprovadas silenciosamente.
 
 ## Git
 - main: branch estável.
 - dev: branch de integração.
 - feature/*: desenvolvimento de funcionalidades.
-- Pull Requests para dev.
-- Merge, inclusive Squash and merge, somente com autorização explícita.
+- Pull Requests para `dev`; após os checks obrigatórios passarem, integrar por squash merge e fechar a issue.
 - Não alterar main durante tarefas de desenvolvimento em feature/*.
 
 ## Documentação
