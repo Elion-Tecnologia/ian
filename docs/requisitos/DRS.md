@@ -217,7 +217,7 @@ como requisito ativo.
 | --- | --- | --- |
 | Cliente / TipoServico | Preservar cadastro, unicidade e catálogo | Entidades/mapeamentos presentes; catálogo fixo sem CRUD, seed e consulta read-only implementados na #24. |
 | Agendamento | Sem EquipeId; campos abaixo | Sem EquipeId; Versao >=1 como token EF, incremento explícito por mutação. |
-| PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Já possui só AgendamentoId e instantes; motor não implementado. |
+| PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Entidade persistente preservada; motor puro de geração e sobreposição implementado na #30. |
 | BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Sem entidade/DbSet ativo; tabela original movida para legado_mvp pela consolidação. |
 | Equipe / ExcecaoExpediente | Fora do modelo ativo; preservar dados legados | Fora do EF ativo; registros, IDs, FKs e sequences preservados em legado_mvp. |
 | SolicitacaoPendente | Estado mínimo durável e versão da operação | Entidade parcial; ciclo conversacional pendente. |
@@ -236,7 +236,7 @@ continuam obrigatórios, com ON DELETE RESTRICT. A #79 implementa preparação e
 Ver [plano de migração](../planejamento/migracao-agenda-unica.md).
 
 A #79 entrega persistência, arquivo legado e mecanismos básicos de concorrência.
-A #30 entrega o motor de períodos e os testes funcionais de 1/7 dias e minutos.
+A #30 implementa o motor de períodos e os testes funcionais de 1/7 dias e minutos.
 #31–#33/#35 devem integrar disponibilidade, versões, confirmações e mutações.
 Testes de callbacks sintéticos não comprovam os casos de uso completos.
 
