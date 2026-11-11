@@ -1,8 +1,8 @@
 # Agenda única — migração incremental e operação (#79)
 
 **Revisão:** 11/11/2026. Implementação autorizada após inventário e ensaio de restauração.
-**Base:** dev, da48cfd (PR #80). Migrations novas executáveis somente em cópias isoladas nesta etapa.
-**Origem ian_t03_tmp:** não migrada; qualquer aplicação futura exige autorização específica.
+**Base implementada:** dev, 700c220 (PR #81).
+**Origem ian_t03_tmp:** migrations da #79 aplicadas em 11/11/2026 após autorização; migrations posteriores exigem nova autorização específica.
 
 ## 1. Escopo e divisão de responsabilidades
 
@@ -145,7 +145,7 @@ Referências: [PostgreSQL locks](https://www.postgresql.org/docs/17/explicit-loc
 
 ## 6. Bancos e testes
 
-- ian_t03_tmp: origem, somente leitura nesta entrega, quatro migrations.
+- ian_t03_tmp: origem de desenvolvimento, com as seis migrations até a #79; não usar em testes destrutivos.
 - ian_t79_restore_validation: cópia do backup para comprovar restauração.
 - ian_t79_tests: exclusivo e descartável; testes podem apagar seus schemas/dados.
 - ian_t79_upgrade_validation: segunda restauração do backup; upgrade revisado para seis migrations preservou todos os dados originais e dez sequences.

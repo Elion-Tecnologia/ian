@@ -16,13 +16,14 @@ public sealed class SingleCalendarMigrationTests : IAsyncLifetime
 
     internal const string Legacy = "20261110155523_TelegramInboxProcessing";
     internal const string Preparation = "20261111132422_PrepararAgendaUnica";
+    internal const string Consolidation = "20261111132554_ConsolidarAgendaUnica";
 
     [PostgresFact]
     public async Task EmptyDatabaseUpgradesWithoutInventingTeamOrCalendar()
     {
         await PostgresTestDatabase.ResetAsync();
         await using var db = PostgresTestDatabase.CreateContext();
-        await db.Database.MigrateAsync();
+        await db.GetService<IMigrator>().MigrateAsync(Consolidation);
         Assert.Equal(6, (await db.Database.GetAppliedMigrationsAsync()).Count());
         Assert.Equal(0, await db.Agendamentos.CountAsync());
         Assert.Equal(0, await Scalar("SELECT count(*) FROM legado_mvp.equipes"));
@@ -45,7 +46,7 @@ public sealed class SingleCalendarMigrationTests : IAsyncLifetime
 
         // An old writer can still change team after preparation. Final map must refresh under lock.
         await Sql("UPDATE public.agendamentos SET \"EquipeId\"=2 WHERE \"Id\"=1;");
-        await db.Database.MigrateAsync();
+        await db.GetService<IMigrator>().MigrateAsync(Consolidation);
 
         Assert.Equal(before, await Fingerprints(true));
         Assert.Equal(sequencesBefore, await SequenceStates());
@@ -96,7 +97,8 @@ public sealed class SingleCalendarMigrationTests : IAsyncLifetime
         };
         await Sql(sql);
         var before = await Fingerprints(false);
-        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync());
+        var error = await Assert.ThrowsAsync<PostgresException>(() =>
+            db.GetService<IMigrator>().MigrateAsync(Consolidation));
         Assert.Equal("P0001", error.SqlState);
         Assert.Equal(before, await Fingerprints(false));
         Assert.Equal(5, (await db.Database.GetAppliedMigrationsAsync()).Count());

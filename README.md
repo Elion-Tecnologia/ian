@@ -121,7 +121,7 @@ Não iniciar a API de teste apontando para a origem: o consumidor da inbox escre
 | Tabela ativa | Regras |
 | --- | --- |
 | clientes | Telefone normalizado obrigatório e único; endereço principal opcional. |
-| tipos_servico | Duração/unidade/modalidade padrão; seed pertence à #24. |
+| tipos_servico | Catálogo fixo da #24 com quatro IDs estáveis e duração/unidade/modalidade padrão; consulta somente leitura. |
 | agendamentos | Cliente e serviço obrigatórios; sem equipe; Versao >=1 como token EF; estado e endereço snapshot preservados. |
 | periodos_ocupacao | Relação 1:N com agendamento; intervalos UTC semiabertos; sem recálculo na migração. |
 | registros_auditoria | Histórico com FK restritiva para agendamento. |

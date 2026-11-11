@@ -20,7 +20,7 @@ consistência dos dados e das agendas.
 Este documento descreve a arquitetura aprovada, os
 componentes existentes e as responsabilidades técnicas.
 
-Base: dev da48cfd (PR #80). A #79 implementa o modelo único e migrations incrementais, validadas somente em bancos isolados. A origem ian_t03_tmp não foi migrada.
+Base: dev 700c220 (PR #81). A #79 implementa o modelo único e migrations incrementais. Após validação em bancos isolados, as duas migrations foram aplicadas à origem de desenvolvimento ian_t03_tmp com autorização explícita.
 
 As funcionalidades descritas como planejadas não devem
 ser consideradas implementadas sem verificação no código.
@@ -160,12 +160,21 @@ Componentes existentes:
 - `Persistence/TelegramUpdateInboxWriter.cs`
 - `Persistence/PostgresTelegramInboxProcessingStore.cs`
 - `Persistence/TelegramBusinessOperationExecutor.cs`
+- `Persistence/PostgresTipoServicoCatalogo.cs`
 - `Telegram/TelegramInboxBackgroundService.cs`
 - `Telegram/TelegramInboxConsumer.cs`
 - `DependencyInjection.cs`
 
 A camada Infrastructure pode depender de
 Application e Domain.
+
+O catálogo fixo de `TipoServico` é populado por migration EF com IDs estáveis.
+`ITipoServicoCatalogo` expõe somente projeções imutáveis; sua implementação
+PostgreSQL usa consulta sem rastreamento. Duração e modalidade copiadas para
+um agendamento continuam independentes dos padrões do catálogo.
+A idempotência do seed é garantida pelo histórico de migrations do EF Core:
+a migration executa inserts normais uma única vez e falha diante de conflitos,
+sem UPSERT silencioso. Ela também preserva uma sequence já mais adiantada.
 
 ### 3.5 Ian.Tests
 
@@ -381,8 +390,9 @@ mapa de equipe antiga, tabelas originais, chaves e sequences em legado_mvp.
 As quatro migrations históricas não mudaram. Não há DropTable no upgrade.
 Os Down novos recusam retorno automático para não inventar equipe nem perder dados.
 
-A origem existente não foi migrada. Backup/restauração e inventário foram
-comprovados; novas migrations foram exercitadas somente em bases isoladas.
+A origem de desenvolvimento recebeu as duas migrations da #79 após
+backup/restauração, inventário e upgrade isolado comprovados. Migrations
+posteriores continuam sendo exercitadas primeiro somente em bases isoladas.
 Procedimento e limites em [plano de migração](planejamento/migracao-agenda-unica.md).
 
 ### 7.3 Concorrência e transações
