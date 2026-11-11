@@ -12,9 +12,7 @@ public sealed class TelegramInboxPostgresTests
 {
     private const long TestUpdateId = 9_100_140_001;
 
-    private static string ConnectionString =>
-        Environment.GetEnvironmentVariable(
-            "IAN_TEST_POSTGRES_CONNECTION_STRING")!;
+    private static string ConnectionString => PostgresTestDatabase.ConnectionString;
 
     [PostgresFact]
     public async Task ConcurrentConsumersClaimUpdateOnlyOnce()
@@ -347,7 +345,7 @@ public sealed class PostgresFactAttribute : FactAttribute
             Environment.GetEnvironmentVariable(
                 "IAN_TEST_POSTGRES_CONNECTION_STRING")))
         {
-            Skip = "Requer o banco ian_t08_tests configurado.";
+            Skip = "Requer banco PostgreSQL descartável explicitamente confirmado.";
         }
     }
 }

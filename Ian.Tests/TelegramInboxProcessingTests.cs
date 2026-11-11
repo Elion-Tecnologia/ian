@@ -174,7 +174,6 @@ public sealed class TelegramInboxProcessingTests
         var deferred = new DeferredTelegramHandlers();
 
         var dispatcher = new TelegramUpdateDispatcher(
-            deferred,
             deferred);
 
         var consumer = new TelegramInboxConsumer(
@@ -201,8 +200,7 @@ public sealed class TelegramInboxProcessingTests
         ITelegramAuthorizedUpdateHandler handler)
     {
         var dispatcher = new TelegramUpdateDispatcher(
-            handler,
-            new TestGroupHandler());
+            handler);
 
         return new TelegramInboxConsumer(
             store,
@@ -233,16 +231,6 @@ public sealed class TelegramInboxProcessingTests
                 throw new InvalidOperationException("Falha simulada.");
             }
 
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class TestGroupHandler : ITelegramGroupEventHandler
-    {
-        public Task HandleCandidateAsync(
-            TelegramGroupEventCandidate candidate,
-            CancellationToken cancellationToken)
-        {
             return Task.CompletedTask;
         }
     }

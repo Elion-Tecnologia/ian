@@ -6,8 +6,3 @@ public interface ITelegramAuthorizedUpdateHandler
         TelegramInboxUpdate update,
         CancellationToken cancellationToken);
 }
-
-public interface ITelegramGroupEventHandler
-{
-    Task HandleCandidateAsync(TelegramGroupEventCandidate candidate, CancellationToken cancellationToken);
-}

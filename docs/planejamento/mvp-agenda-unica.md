@@ -1,6 +1,6 @@
 # MVP textual de agenda única — planejamento revisado
 
-Decisão inicial de 10/11/2026, corrigida em 11/11/2026. Uma agenda, uma administradora, comandos textuais privados. DRS 2.1 contém as regras vigentes; o [plano de migração](migracao-agenda-unica.md) distingue o legado implementado do modelo proposto.
+Decisão inicial de 10/11/2026, corrigida em 11/11/2026. Uma agenda, uma administradora, comandos textuais privados. DRS 2.1 contém as regras vigentes; o [plano de migração](migracao-agenda-unica.md) documenta a implementação da #79 e a transição dos bancos existentes.
 
 ## Escopo vigente
 
@@ -9,11 +9,11 @@ Decisão inicial de 10/11/2026, corrigida em 11/11/2026. Uma agenda, uma adminis
 - Horário informado diferente de 08h em DiasCorridos exige esclarecimento antes de reservar; não assumir início parcial ou corrigir a intenção silenciosamente. Sem horário informado, usar a janela fixa. Minutos mantém seu cálculo próprio.
 - Consultas textuais sob demanda e respostas normais no privado da administradora permanecem; #18/#51 tratam o envio e a recuperação de respostas pendentes.
 - Sem equipes, grupos, jornadas excepcionais, folgas, bloqueios administrativos, resumo automático, reabertura, prorrogação manual ou dashboards no MVP.
-- Nenhuma alteração em Domain, EF Core ou migrations nesta PR. BloqueioAgenda permanece no código legado e só será retirada do modelo ativo na #79, com preservação de registros, intervalos e relações históricas.
+- A #79 implementa persistência da agenda única e arquivo legado; a origem existente permanece sem novas migrations até autorização específica. O motor de períodos é #30.
 
 ## Entregas e estado
 
-PR #77 encerrada sem merge; #17 Not planned. #78 remove a infraestrutura de voz integrada; implementação em feature/remove-voice, Draft PR #80 para dev. #79 acompanha a migração posterior do modelo e a retirada de contratos de grupos, sem execução nesta PR.
+PR #77 encerrada sem merge; #17 Not planned. A limpeza #78 foi integrada pela PR #80. A #79 implementa domínio/persistência, migração incremental, concorrência básica e retirada dos contratos de grupos; validação somente em bancos isolados.
 
 A rodada anterior reescreveu 36 issues e sete épicos e anotou a transição em #1/#12/#15/#19 sem reabri-las. Esta revisão corrige as regras e dependências afetadas. As issues #38/#53/#50 foram encerradas como Not planned; #40 continua aberta explicitamente como pós-MVP, fora dos critérios de entrega e das dependências ativas.
 
@@ -86,7 +86,7 @@ Os corpos anteriores das issues encerradas ficam identificados como histórico; 
 ## Sequência e dependências principais
 
 1. Revisar #78 e o plano #79; sem merge implícito.
-2. #57/#58: identificar ambientes e ensaiar backup/restauração; inventário somente leitura antes da #79. O usuário confirmou que ainda não configurou os secrets; isso não prova banco vazio.
+2. #57/#58: identificar ambientes e ensaiar backup/restauração; inventário somente leitura antes da #79. Inventário e backup/restauração foram comprovados na #79; a origem contém dois registros técnicos que devem ser preservados.
 3. #79: migrar somente após autorização e reconciliação explícita de conflitos entre equipes antigas, primeiras datas parciais, exceções e efeitos dos bloqueios legados. Arquivar bloqueios integralmente, sem convertê-los em funcionalidade global.
 4. #20–#22, #24–#26 e #42: contratos de Tools, pendência/confirmação, catálogo/clientes e auditoria avançam pelas dependências próprias.
 5. #30–#33/#35/#41: cálculo com janelas completas, criar/consultar/editar/reagendar/concluir/cancelar e desambiguar; sem dependências de #38/#40/#50/#53.
@@ -98,8 +98,16 @@ As dependências completas estão nos corpos das issues. #9–#16 e #19 permanec
 
 ## Preservação de dados e verificação
 
-O código ainda contém Equipe, ExcecaoExpediente, BloqueioAgenda, EquipeId e o candidato técnico de grupo. Esses objetos serão tratados na #79 após inventário/backup, com dados históricos preservados. Não ampliar períodos antigos silenciosamente para satisfazer as janelas novas nem excluir conflitos entre equipes.
+A #79 retirou Equipe, ExcecaoExpediente, BloqueioAgenda, EquipeId e os contratos
+de candidatos a grupo do modelo ativo. As migrations incrementais preservam
+snapshots, vínculos, tabelas, IDs, FKs e sequences no esquema `legado_mvp`.
+Períodos antigos não são ampliados ou recalculados; conflitos e efeitos legados
+fazem a consolidação abortar para decisão explícita.
 
-A limpeza técnica #78 removeu 13 arquivos de voz, DI/options/configuração e projeção voice/audio, preservando identificação, texto, integração IA, webhook, inbox, idempotência e auditoria. Sua regressão Release registrou 111 aprovados, nove ignorados e zero falhas. Os sete PostgreSQL continuam não executados, sem banco descartável; dois smokes Gemini permanecem sem opt-in. Esta correção de planejamento não implementa regras novas nem autoriza SQL ou chamadas Google.
-
-Revisão de 11/11/2026: build Release novamente concluído com zero erros/avisos; regressão com 111 aprovados, nove ignorados e zero falhas (total 120). O diff desta continuação contém somente documentação; Domain, EF Core e migrations permanecem intactos. A conferência das dependências ativas não encontrou referências a #38/#40/#50/#53 como pré-requisitos do MVP.
+Em 11/11/2026, backup e restauração preservaram as 14 tabelas, os dois registros
+técnicos e dez sequences. O upgrade da cópia restaurada passou com seis migrations,
+enquanto a origem `ian_t03_tmp` permaneceu nas quatro migrations históricas.
+Build Release terminou sem erros ou avisos; 137 testes passaram, incluindo os
+testes PostgreSQL no banco descartável `ian_t79_tests`. Os dois smokes Gemini
+foram ignorados e nenhuma chamada real foi feita. Detalhes estão no
+[relatório de validação](validacao-agenda-unica.md).

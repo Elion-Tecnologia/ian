@@ -4,7 +4,7 @@
 **Decisão inicial:** 10/11/2026
 **Revisão de escopo aprovada:** 11/11/2026
 **Substitui:** escopo funcional da versão 1.0 para o MVP
-**Estado:** requisitos abaixo aprovados; modelo físico novo proposto, ainda não migrado
+**Estado:** requisitos abaixo aprovados; modelo físico implementado na #79; origem existente ainda não migrada
 **Repositório:** Elion-Tecnologia/ian
 
 ## 1. Objetivo e escopo
@@ -32,8 +32,7 @@ Bloqueios administrativos e resumo automático às 07h50 foram retirados do
 MVP; #38, #53 e #50 foram encerradas como Not planned. A prorrogação manual
 #40 fica aberta como pós-MVP, sem bloquear a entrega. Reabertura também
 fica fora das seis operações do MVP. Consultas sob demanda e o envio das
-respostas correspondentes permanecem. BloqueioAgenda continua no código
-legado e só sairá do modelo ativo na #79, preservando seus dados históricos.
+respostas correspondentes permanecem. BloqueioAgenda foi retirada do modelo ativo na #79; as novas migrations arquivam seus dados históricos.
 
 ## 2. Atores e canais
 
@@ -211,20 +210,20 @@ A duração em dias corridos exige janelas completas; prorrogação da RN-039
 fica pós-MVP. O histórico do DRS anterior permanece no Git, sem funcionar
 como requisito ativo.
 
-## 7. Modelo conceitual proposto e estado implementado
+## 7. Modelo e estado implementado
 
 | Componente | Proposta final do MVP | Estado do código nesta entrega |
 | --- | --- | --- |
 | Cliente / TipoServico | Preservar cadastro, unicidade e catálogo | Entidades/mapeamentos presentes; casos de uso/seed pendentes. |
-| Agendamento | Sem EquipeId; campos abaixo | Ainda possui EquipeId obrigatório. |
+| Agendamento | Sem EquipeId; campos abaixo | Sem EquipeId; Versao >=1 como token EF, incremento explícito por mutação. |
 | PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Já possui só AgendamentoId e instantes; motor não implementado. |
-| BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Ainda mapeada, com EquipeId opcional; intocada nesta PR. |
-| Equipe / ExcecaoExpediente | Fora do modelo ativo; preservar dados legados | Ainda mapeadas pelo EF e migrations anteriores. |
+| BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Sem entidade/DbSet ativo; tabela original movida para legado_mvp pela consolidação. |
+| Equipe / ExcecaoExpediente | Fora do modelo ativo; preservar dados legados | Fora do EF ativo; registros, IDs, FKs e sequences preservados em legado_mvp. |
 | SolicitacaoPendente | Estado mínimo durável e versão da operação | Entidade parcial; ciclo conversacional pendente. |
 | RegistroAuditoria / EnvioTelegram | Preservar histórico e saída privada | Entidades presentes; casos de uso pendentes. |
 | TelegramUpdateInbox / TelegramBusinessOperation | Preservar controles técnicos | Recebimento, recuperação e executor idempotente implementados. |
 
-Agendamento proposto: `Id: long`, `ClienteId: long`, `TipoServicoId: long`,
+Agendamento implementado: `Id: long`, `ClienteId: long`, `TipoServicoId: long`,
 `Modalidade: ModalidadeServico`, `Duracao: int > 0`,
 `UnidadeDuracao: Minutos | DiasCorridos`, `InicioPrevistoUtc: DateTimeOffset`,
 `FimPrevistoUtc: DateTimeOffset > início`, `EnderecoSnapshot: string?`,
@@ -232,9 +231,13 @@ Agendamento proposto: `Id: long`, `ClienteId: long`, `TipoServicoId: long`,
 para controle concorrente e invalidação de confirmações antigas.
 
 Não haverá AgendaId nem tabela Agenda para uma agenda única. Cliente e serviço
-continuam obrigatórios, com ON DELETE RESTRICT. O plano #79 diferencia
-preparação, reconciliação e consolidação; não foi gerada nem executada migration.
+continuam obrigatórios, com ON DELETE RESTRICT. A #79 implementa preparação e consolidação incrementais, executadas somente em bancos isolados. A origem ian_t03_tmp permanece nas quatro migrations históricas.
 Ver [plano de migração](../planejamento/migracao-agenda-unica.md).
+
+A #79 entrega persistência, arquivo legado e mecanismos básicos de concorrência.
+A #30 entrega o motor de períodos e os testes funcionais de 1/7 dias e minutos.
+#31–#33/#35 devem integrar disponibilidade, versões, confirmações e mutações.
+Testes de callbacks sintéticos não comprovam os casos de uso completos.
 
 ## 8. Critérios de aceite e testes
 
@@ -257,8 +260,7 @@ Ver [plano de migração](../planejamento/migracao-agenda-unica.md).
 CA-04 (folga), CA-06 (grupo), CA-07 (atualização de grupos), CA-08 (resumo)
 e CA-16 (bloqueios administrativos) foram retirados.
 Testes usam dados sintéticos e fakes de Gemini/Telegram; PostgreSQL usa banco
-isolado. Testes ignorados não são aprovados. Sete testes PostgreSQL existentes
-permanecem sem execução neste ambiente até existir conexão descartável.
+isolado. Testes ignorados não são aprovados. Os sete testes PostgreSQL existentes e os novos testes de migração/concorrência foram executados em banco descartável. Smokes reais Gemini permanecem desativados.
 
 ## 9. Segurança, qualidade e operação
 
@@ -272,16 +274,11 @@ normalização de telefones continuam nas issues correspondentes.
 ## 10. Planejamento e migração
 
 O backlog revisado está em [mvp-agenda-unica.md](../planejamento/mvp-agenda-unica.md).
-A #78 limpa a entrada; a #79 adapta o modelo após revisão. A dependência de
+A #78 limpou a entrada; a #79 implementa o modelo e as migrations incrementais. A dependência de
 migração é explícita nas issues de agenda e não deve ser substituída pela
 mera existência das entidades antigas da #12.
 
-A inspeção deste ambiente não encontrou conexão PostgreSQL configurada ou
-instância local identificável. Em 11/11/2026, o usuário confirmou que ainda
-não configurou os secrets. **A presença e o volume de dados nos bancos
-existentes permanecem desconhecidos.** Não considerar o banco vazio. Antes
-da migração, inventariar em leitura, ensaiar backup/restore e resolver conflitos
-entre agendas antigas com decisão humana. Nenhum SQL destrutivo foi executado.
+Em 11/11/2026, o inventário autorizado confirmou PostgreSQL 17.11 e 14 tabelas em ian_t03_tmp: nenhum registro de negócio, uma inbox Completed e um registro auxiliar de teste. Backup completo e restauração em ian_t79_restore_validation preservaram dados, chaves e sequences. A origem recebeu apenas leituras. Migrations e testes de escrita são restritos a cópias isoladas; ver plano e evidências da #79.
 
 Fluxo Git: feature/* para dev por PR; main apenas após homologação e autorização.
 Nenhum merge, inclusive squash, está implicitamente autorizado. A meta original

@@ -11,18 +11,10 @@ public sealed class TelegramHandlerUnavailableException : Exception
 }
 
 public sealed class DeferredTelegramHandlers :
-    ITelegramAuthorizedUpdateHandler,
-    ITelegramGroupEventHandler
+    ITelegramAuthorizedUpdateHandler
 {
     public Task HandleAsync(
         TelegramInboxUpdate update,
-        CancellationToken cancellationToken)
-    {
-        throw new TelegramHandlerUnavailableException();
-    }
-
-    public Task HandleCandidateAsync(
-        TelegramGroupEventCandidate candidate,
         CancellationToken cancellationToken)
     {
         throw new TelegramHandlerUnavailableException();

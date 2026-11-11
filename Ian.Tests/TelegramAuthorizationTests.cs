@@ -37,7 +37,7 @@ public sealed class TelegramAuthorizationTests
         TelegramAuthorizationDecision.NonCommandEvent)]
     [InlineData(
         """{"update_id":9,"message":{"from":{"id":42,"is_bot":false},"chat":{"id":-100,"type":"supergroup"},"new_chat_members":[{"id":500,"is_bot":true}]}}""",
-        TelegramAuthorizationDecision.NonCommandEvent)]
+        TelegramAuthorizationDecision.Denied)]
     [InlineData(
         """{"update_id":10,"message":{"from":{"id":42,"is_bot":false},"chat":{"id":-100,"type":"supergroup"},"new_chat_members":[{"id":500,"is_bot":false}]}}""",
         TelegramAuthorizationDecision.Denied)]
@@ -73,11 +73,9 @@ public sealed class TelegramAuthorizationTests
     public async Task AuthorizedMessageReachesAdministrativeHandler()
     {
         var administrativeHandler = new AdministrativeHandlerSpy();
-        var groupHandler = new GroupHandlerSpy();
 
         var dispatcher = new TelegramUpdateDispatcher(
-            administrativeHandler,
-            groupHandler);
+            administrativeHandler);
 
         var update = new TelegramInboxUpdate(
             12,
@@ -89,7 +87,6 @@ public sealed class TelegramAuthorizationTests
 
         Assert.Equal(TelegramAuthorizationDecision.Authorized, decision);
         Assert.Equal(1, administrativeHandler.Calls);
-        Assert.Equal(0, groupHandler.Calls);
     }
 
     [Theory]
@@ -104,11 +101,9 @@ public sealed class TelegramAuthorizationTests
     public async Task DeniedMessagesNeverReachHandlers(string json)
     {
         var administrativeHandler = new AdministrativeHandlerSpy();
-        var groupHandler = new GroupHandlerSpy();
 
         var dispatcher = new TelegramUpdateDispatcher(
-            administrativeHandler,
-            groupHandler);
+            administrativeHandler);
 
         using var document = JsonDocument.Parse(json);
 
@@ -122,18 +117,15 @@ public sealed class TelegramAuthorizationTests
 
         Assert.Equal(TelegramAuthorizationDecision.Denied, decision);
         Assert.Equal(0, administrativeHandler.Calls);
-        Assert.Equal(0, groupHandler.Calls);
     }
 
     [Fact]
     public async Task GroupEventNeverExecutesAdministrativeHandler()
     {
         var administrativeHandler = new AdministrativeHandlerSpy();
-        var groupHandler = new GroupHandlerSpy();
 
         var dispatcher = new TelegramUpdateDispatcher(
-            administrativeHandler,
-            groupHandler);
+            administrativeHandler);
 
         var update = new TelegramInboxUpdate(
             17,
@@ -144,24 +136,19 @@ public sealed class TelegramAuthorizationTests
             AdministratorId);
 
         Assert.Equal(
-            TelegramAuthorizationDecision.NonCommandEvent,
+            TelegramAuthorizationDecision.Denied,
             decision);
 
         Assert.Equal(0, administrativeHandler.Calls);
-        Assert.Equal(1, groupHandler.Calls);
-        Assert.Equal(-100123, groupHandler.LastCandidate?.ChatId);
-        Assert.Equal(17, groupHandler.LastCandidate?.UpdateId);
     }
 
     [Fact]
     public async Task InvalidStoredJsonDoesNotReachHandlers()
     {
         var administrativeHandler = new AdministrativeHandlerSpy();
-        var groupHandler = new GroupHandlerSpy();
 
         var dispatcher = new TelegramUpdateDispatcher(
-            administrativeHandler,
-            groupHandler);
+            administrativeHandler);
 
         var decision = await dispatcher.DispatchAsync(
             new TelegramInboxUpdate(18, "{invalid-json"),
@@ -169,7 +156,6 @@ public sealed class TelegramAuthorizationTests
 
         Assert.Equal(TelegramAuthorizationDecision.Denied, decision);
         Assert.Equal(0, administrativeHandler.Calls);
-        Assert.Equal(0, groupHandler.Calls);
     }
 
     private sealed class AdministrativeHandlerSpy
@@ -182,23 +168,6 @@ public sealed class TelegramAuthorizationTests
             CancellationToken cancellationToken)
         {
             Calls++;
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class GroupHandlerSpy
-        : ITelegramGroupEventHandler
-    {
-        public int Calls { get; private set; }
-
-        public TelegramGroupEventCandidate? LastCandidate { get; private set; }
-
-        public Task HandleCandidateAsync(
-            TelegramGroupEventCandidate candidate,
-            CancellationToken cancellationToken)
-        {
-            Calls++;
-            LastCandidate = candidate;
             return Task.CompletedTask;
         }
     }

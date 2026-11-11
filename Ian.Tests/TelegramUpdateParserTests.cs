@@ -6,6 +6,23 @@ namespace Ian.Tests;
 public sealed class TelegramUpdateParserTests
 {
     [Fact]
+    public void GroupMembershipMetadataIsNotProjected()
+    {
+        using var source = JsonDocument.Parse("""
+            {"update_id":124,"message":{"chat":{"id":-100,"type":"supergroup"},
+            "new_chat_members":[{"id":500,"is_bot":true}],
+            "left_chat_member":{"id":500,"is_bot":true}}}
+            """);
+        Assert.True(TelegramUpdateParser.TryParse(source.RootElement, out var update));
+        using var stored = JsonDocument.Parse(update!.PayloadJson);
+        var message = stored.RootElement.GetProperty("message");
+        Assert.False(message.TryGetProperty("new_chat_members", out _));
+        Assert.False(message.TryGetProperty("left_chat_member", out _));
+        Assert.Equal(TelegramAuthorizationDecision.Denied,
+            TelegramUpdateAuthorization.Evaluate(stored.RootElement, 42));
+    }
+
+    [Fact]
     public void TextProjectionPreservesIdentityAndTextWithoutMediaMetadata()
     {
         using var source = JsonDocument.Parse("""
