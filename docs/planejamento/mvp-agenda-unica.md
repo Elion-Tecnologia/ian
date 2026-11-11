@@ -9,7 +9,7 @@ Decisão inicial de 10/11/2026, corrigida em 11/11/2026. Uma agenda, uma adminis
 - Horário informado diferente de 08h em DiasCorridos exige esclarecimento antes de reservar; não assumir início parcial ou corrigir a intenção silenciosamente. Sem horário informado, usar a janela fixa. Minutos mantém seu cálculo próprio.
 - Consultas textuais sob demanda e respostas normais no privado da administradora permanecem; #18/#51 tratam o envio e a recuperação de respostas pendentes.
 - Sem equipes, grupos, jornadas excepcionais, folgas, bloqueios administrativos, resumo automático, reabertura, prorrogação manual ou dashboards no MVP.
-- A #79 implementa persistência da agenda única e arquivo legado; a origem existente permanece sem novas migrations até autorização específica. O motor de períodos é #30.
+- A #79 implementa persistência da agenda única e arquivo legado; suas duas migrations foram aplicadas à origem de desenvolvimento após autorização. O motor de períodos é #30.
 
 ## Entregas e estado
 
@@ -107,6 +107,8 @@ fazem a consolidação abortar para decisão explícita.
 Em 11/11/2026, backup e restauração preservaram as 14 tabelas, os dois registros
 técnicos e dez sequences. O upgrade da cópia restaurada passou com seis migrations,
 enquanto a origem `ian_t03_tmp` permaneceu nas quatro migrations históricas.
+Posteriormente, as duas migrations da #79 foram aplicadas nessa origem com
+autorização explícita e validação dos registros técnicos e sequences.
 Build Release terminou sem erros ou avisos; 137 testes passaram, incluindo os
 testes PostgreSQL no banco descartável `ian_t79_tests`. Os dois smokes Gemini
 foram ignorados e nenhuma chamada real foi feita. Detalhes estão no

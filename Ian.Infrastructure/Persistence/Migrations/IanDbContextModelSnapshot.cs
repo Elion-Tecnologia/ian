@@ -386,6 +386,9 @@ namespace Ian.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Nome")
+                        .IsUnique();
+
                     b.ToTable("tipos_servico", null, t =>
                         {
                             t.HasCheckConstraint("ck_tipos_servico_duracao_positiva", " \"DuracaoPadrao\" > 0 ");
@@ -393,6 +396,40 @@ namespace Ian.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_tipos_servico_modalidade", " \"ModalidadePadrao\" IN ('Interno', 'Externo', 'Remoto') ");
 
                             t.HasCheckConstraint("ck_tipos_servico_unidade_duracao", " \"UnidadeDuracaoPadrao\" IN ('Minutos', 'DiasCorridos') ");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1L,
+                            DuracaoPadrao = 240,
+                            ModalidadePadrao = "Externo",
+                            Nome = "Visita técnica",
+                            UnidadeDuracaoPadrao = "Minutos"
+                        },
+                        new
+                        {
+                            Id = 2L,
+                            DuracaoPadrao = 7,
+                            ModalidadePadrao = "Externo",
+                            Nome = "Montagem",
+                            UnidadeDuracaoPadrao = "DiasCorridos"
+                        },
+                        new
+                        {
+                            Id = 3L,
+                            DuracaoPadrao = 7,
+                            ModalidadePadrao = "Externo",
+                            Nome = "Ajuste",
+                            UnidadeDuracaoPadrao = "DiasCorridos"
+                        },
+                        new
+                        {
+                            Id = 4L,
+                            DuracaoPadrao = 1,
+                            ModalidadePadrao = "Interno",
+                            Nome = "Orçamento",
+                            UnidadeDuracaoPadrao = "DiasCorridos"
                         });
                 });
 

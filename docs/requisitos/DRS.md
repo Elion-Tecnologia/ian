@@ -4,7 +4,7 @@
 **Decisão inicial:** 10/11/2026
 **Revisão de escopo aprovada:** 11/11/2026
 **Substitui:** escopo funcional da versão 1.0 para o MVP
-**Estado:** requisitos abaixo aprovados; modelo físico implementado na #79; origem existente ainda não migrada
+**Estado:** requisitos abaixo aprovados; modelo físico da #79 aplicado à origem de desenvolvimento; catálogo fixo implementado na #24
 **Repositório:** Elion-Tecnologia/ian
 
 ## 1. Objetivo e escopo
@@ -105,8 +105,9 @@ Integrações externas não oferecem garantia absoluta de exactly once.
 
 A duração e a modalidade podem ser substituídas por agendamento sem alterar
 catálogo ou compromissos anteriores. Modalidades: Interno, Externo, Remoto.
-Endereço snapshot é obrigatório apenas para Externo. O seed permanece
-planejado na #24, não deve ser presumido existente.
+Endereço snapshot é obrigatório apenas para Externo. A #24 mantém os quatro
+itens por seed EF idempotente, com IDs estáveis e consulta somente leitura;
+não existe CRUD livre do catálogo.
 
 ## 5. Requisitos funcionais do MVP
 
@@ -214,7 +215,7 @@ como requisito ativo.
 
 | Componente | Proposta final do MVP | Estado do código nesta entrega |
 | --- | --- | --- |
-| Cliente / TipoServico | Preservar cadastro, unicidade e catálogo | Entidades/mapeamentos presentes; casos de uso/seed pendentes. |
+| Cliente / TipoServico | Preservar cadastro, unicidade e catálogo | Entidades/mapeamentos presentes; catálogo fixo sem CRUD, seed e consulta read-only implementados na #24. |
 | Agendamento | Sem EquipeId; campos abaixo | Sem EquipeId; Versao >=1 como token EF, incremento explícito por mutação. |
 | PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Já possui só AgendamentoId e instantes; motor não implementado. |
 | BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Sem entidade/DbSet ativo; tabela original movida para legado_mvp pela consolidação. |
@@ -231,7 +232,7 @@ Agendamento implementado: `Id: long`, `ClienteId: long`, `TipoServicoId: long`,
 para controle concorrente e invalidação de confirmações antigas.
 
 Não haverá AgendaId nem tabela Agenda para uma agenda única. Cliente e serviço
-continuam obrigatórios, com ON DELETE RESTRICT. A #79 implementa preparação e consolidação incrementais, executadas somente em bancos isolados. A origem ian_t03_tmp permanece nas quatro migrations históricas.
+continuam obrigatórios, com ON DELETE RESTRICT. A #79 implementa preparação e consolidação incrementais, validadas em bancos isolados e posteriormente aplicadas à origem de desenvolvimento com autorização explícita.
 Ver [plano de migração](../planejamento/migracao-agenda-unica.md).
 
 A #79 entrega persistência, arquivo legado e mecanismos básicos de concorrência.
@@ -278,7 +279,7 @@ A #78 limpou a entrada; a #79 implementa o modelo e as migrations incrementais. 
 migração é explícita nas issues de agenda e não deve ser substituída pela
 mera existência das entidades antigas da #12.
 
-Em 11/11/2026, o inventário autorizado confirmou PostgreSQL 17.11 e 14 tabelas em ian_t03_tmp: nenhum registro de negócio, uma inbox Completed e um registro auxiliar de teste. Backup completo e restauração em ian_t79_restore_validation preservaram dados, chaves e sequences. A origem recebeu apenas leituras. Migrations e testes de escrita são restritos a cópias isoladas; ver plano e evidências da #79.
+Em 11/11/2026, o inventário autorizado confirmou PostgreSQL 17.11 e 14 tabelas em ian_t03_tmp: nenhum registro de negócio, uma inbox Completed e um registro auxiliar de teste. Backup completo e restauração em ian_t79_restore_validation preservaram dados, chaves e sequences. Após o ensaio, as duas migrations da #79 foram aplicadas à origem com autorização e preservaram os registros técnicos e dez sequences. Testes destrutivos continuam restritos a cópias isoladas; ver plano e evidências da #79.
 
 Fluxo Git: feature/* para dev por PR; main apenas após homologação e autorização.
 Nenhum merge, inclusive squash, está implicitamente autorizado. A meta original

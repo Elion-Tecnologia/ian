@@ -73,8 +73,9 @@ exemplos de API que precisam ser atualizados.
 ## Transição para o MVP
 A #79 implementa Agendamento sem EquipeId, Versao e migrations incrementais
 que preservam equipes, exceções, bloqueios e vínculos antigos em legado_mvp.
-As quatro migrations históricas devem permanecer intactas. A origem ian_t03_tmp
-não foi migrada e exige autorização específica para qualquer alteração.
+As quatro migrations históricas devem permanecer intactas. As duas migrations
+da #79 foram aplicadas em ian_t03_tmp após autorização e validação; qualquer
+migration posterior continua exigindo autorização específica.
 #30 implementará o motor de ocupações; #31–#33/#35 integrarão os casos de uso.
 Testes de infraestrutura não comprovam esses fluxos funcionais.
 Testes PostgreSQL exigem conexão descartável local ian_t<numero>_tests e
