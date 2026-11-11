@@ -135,6 +135,12 @@ Entidades existentes em `Ian.Domain/Entities/` (modelo ativo da #79):
 - TelegramUpdateInbox
 - TelegramBusinessOperation
 
+Componentes de agenda puros em `Ian.Domain/Agenda/`:
+
+- `CalculadoraOcupacao`: gera janelas em UTC para Minutos e DiasCorridos.
+- `ResultadoCalculoOcupacao`: distingue cálculo, esclarecimento e entrada inválida.
+- `PeriodoCalculado`: intervalo UTC semiaberto e teste de sobreposição.
+
 A existência de uma entidade não significa que todos
 os casos de uso associados estejam implementados.
 
@@ -414,11 +420,11 @@ versão obsoleta, rollback, timeout e idempotência. São testes de infraestrutu
 Não existe constraint de exclusão: todos os caminhos de escrita devem respeitar
 o protocolo; SQL manual que o ignore não é protegido.
 
-### 7.4 Limite da #79
+### 7.4 Limites da persistência e do motor
 
-A #30 implementará o motor determinístico, jornada fixa 08h–18h todos os dias em
-America/Sao_Paulo e geração de janelas em minutos/dias corridos. As verificações
-da migration apenas recusam legado incompatível, sem recalcular ocupações.
+A #30 implementa o motor determinístico no Domain, com jornada fixa 08h–18h
+todos os dias em America/Sao_Paulo e geração de janelas em minutos/dias corridos.
+As verificações da migration apenas recusam legado incompatível, sem recalcular ocupações.
 Os casos de uso #31–#33/#35 e as tools ainda precisam integrar concorrência,
 disponibilidade, autorização, confirmação e auditoria. Não estão implementados
 por esta infraestrutura.

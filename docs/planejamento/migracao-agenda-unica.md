@@ -13,7 +13,7 @@ PeriodoOcupacao conserva Id, AgendamentoId, InicioUtc e FimUtc, cardinalidade 1:
 e intervalos semiabertos. Cliente, TipoServico, auditoria, solicitações pendentes,
 envios, inbox e barreira idempotente permanecem. Não existe entidade Agenda.
 
-A #30 implementará o motor determinístico: America/Sao_Paulo, todos os dias,
+A #30 implementa o motor determinístico no Domain: America/Sao_Paulo, todos os dias,
 08h–18h; DiasCorridos usa janelas completas inclusive na primeira data e domingos,
 1 dia = 1 janela, 7 dias = 7 datas consecutivas. Horário informado diferente de 08h
 exige esclarecimento sem reserva. Minutos consome expediente e continua no dia
@@ -145,7 +145,7 @@ Referências: [PostgreSQL locks](https://www.postgresql.org/docs/17/explicit-loc
 
 ## 6. Bancos e testes
 
-- ian_t03_tmp: origem de desenvolvimento, com as seis migrations até a #79; não usar em testes destrutivos.
+- ian_t03_tmp: origem de desenvolvimento, com sete migrations até o catálogo #24; não usar em testes destrutivos.
 - ian_t79_restore_validation: cópia do backup para comprovar restauração.
 - ian_t79_tests: exclusivo e descartável; testes podem apagar seus schemas/dados.
 - ian_t79_upgrade_validation: segunda restauração do backup; upgrade revisado para seis migrations preservou todos os dados originais e dez sequences.

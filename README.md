@@ -136,7 +136,8 @@ As quatro migrations anteriores permanecem intactas; não há DropTable no upgra
 AgendaMutationExecutor integra a transação idempotente com advisory lock global.
 Os futuros callbacks devem reler estado, validar conflitos/confirmação e chamar
 IncrementarVersao(), inclusive ao modificar somente ocupações. Não há caso de uso
-de agendamento implementado por esse executor. O motor de períodos pertence à #30.
+de agendamento implementado por esse executor. A #30 implementa no Domain o motor
+determinístico de períodos; persistência e disponibilidade pertencem aos casos de uso posteriores.
 ### Integração contínua
 
 O fluxo do repositório é `feature/*` → `dev` → `main`. As tarefas entram em `dev` por Pull Request. A `main` recebe versões após homologação.
