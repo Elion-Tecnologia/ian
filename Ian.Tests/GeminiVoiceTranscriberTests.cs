@@ -239,7 +239,7 @@ public sealed class GeminiVoiceTranscriberTests
     {
         var calls = 0;
         var audio = SyntheticOggOpus.Create();
-        using var factory = new GeminiChatClientFactory(Settings(), new HttpClient(new CallbackHandler(async request =>
+        using var transport = new GeminiSmokeTransport(1, new CallbackHandler(async request =>
         {
             calls++;
             using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
@@ -249,20 +249,73 @@ public sealed class GeminiVoiceTranscriberTests
             var inline = Assert.Single(parts, p => p.TryGetProperty("inlineData", out _)).GetProperty("inlineData");
             Assert.Equal("audio/ogg", inline.GetProperty("mimeType").GetString());
             Assert.Equal(audio, inline.GetProperty("data").GetBytesFromBase64());
-            Assert.Equal("application/json", root.GetProperty("generationConfig").GetProperty("responseMimeType").GetString());
+            Assert.True(root.TryGetProperty("systemInstruction", out var instruction));
+            Assert.NotEmpty(instruction.GetProperty("parts").EnumerateArray());
+            var config = root.GetProperty("generationConfig");
+            Assert.Equal("application/json", config.GetProperty("responseMimeType").GetString());
+            Assert.Equal(4096, config.GetProperty("maxOutputTokens").GetInt32());
+            Assert.True(config.TryGetProperty("responseJsonSchema", out _) ||
+                config.TryGetProperty("responseSchema", out _));
             return new HttpResponseMessage((HttpStatusCode)status)
             {
                 Content = new StringContent(status == 200
                     ? JsonSerializer.Serialize(new { candidates = new[] { new { content = new { role = "model", parts = new[] { new { text = Accepted } } }, finishReason = "STOP" } } })
                     : """{"error":{"code":429,"message":"PRIVATE","status":"RESOURCE_EXHAUSTED"}}""", Encoding.UTF8, "application/json")
             };
-        })));
+        }));
+        using var factory = new GeminiChatClientFactory(Settings(),
+            new HttpClient(transport) { Timeout = Timeout.InfiniteTimeSpan });
         using var file = new TelegramVoiceFile(audio);
         var result = await new GeminiVoiceTranscriber(Settings(), Options.Create(new TelegramVoiceOptions()), factory.GetClient)
             .TranscribeAsync(file, 120, default);
         Assert.Equal(failure, result.Failure);
         Assert.Equal(1, calls);
+        Assert.Equal(1, transport.Calls);
+        Assert.Equal(0, transport.Blocked);
         if (failure is null) Assert.Equal("Consultar agenda", result.Text);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstalledSdkPassesCancellationToHttpTransportWithoutRetry(bool callerCancels)
+    {
+        var calls = 0;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var factory = new GeminiChatClientFactory(Settings(timeout: 1),
+            new HttpClient(new CancellationHandler(async token =>
+            {
+                Interlocked.Increment(ref calls);
+                entered.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    cancelled.TrySetResult();
+                    throw;
+                }
+                throw new InvalidOperationException("Resposta sintética não esperada.");
+            })) { Timeout = Timeout.InfiniteTimeSpan });
+        using var file = new TelegramVoiceFile(SyntheticOggOpus.Create());
+        using var caller = new CancellationTokenSource();
+        var task = new GeminiVoiceTranscriber(Settings(timeout: 1), Options.Create(new TelegramVoiceOptions()), factory.GetClient)
+            .TranscribeAsync(file, 120, caller.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        if (callerCancels)
+        {
+            caller.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task.WaitAsync(TimeSpan.FromSeconds(5)));
+        }
+        else
+        {
+            var result = await task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(TelegramVoiceFailure.Timeout, result.Failure);
+        }
+        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, calls);
     }
 
     private static int LastPage(byte[] bytes)
@@ -288,6 +341,12 @@ public sealed class GeminiVoiceTranscriberTests
     private sealed class CallbackHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> callback) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => callback(request);
+    }
+
+    private sealed class CancellationHandler(Func<CancellationToken, Task<HttpResponseMessage>> callback) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            callback(cancellationToken);
     }
 
     private sealed class FakeClient : IChatClient

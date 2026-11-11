@@ -380,9 +380,92 @@ Os demais ignorados são os dois smokes textuais da #19 e a teoria de áudio
 da #17, desabilitados na regressão após remover as flags. Os resultados
 da rodada parcial real estão registrados separadamente, incluindo a falha.
 
+## Diagnóstico local do timeout, sem novo envio ao Google
+
+O checkout desta análise é `feature/voice-transcription` no commit
+`6ed3a107`. O CI desse commit concluiu com sucesso. O resumo histórico da
+rodada e seus contadores está nesta página e na Draft PR #77; os arquivos
+TRX brutos, guardados fora do Git no ambiente anterior, não estavam
+disponíveis neste checkout macOS. Portanto, não há marcos internos da
+requisição real além dos 60013 ms totais e de um despacho HTTP contado.
+
+Fluxo confirmado: `GeminiVoiceTranscriber` cria um deadline vinculado de
+60 s, valida OGG/Opus e silêncio, cria um `ChatClientAgent` sem tools nem
+histórico e chama `RunAsync`. `GeminiChatClientFactory` entrega ao MAF o
+`GoogleGenAIChatClient` do Google.GenAI 2.0.0, com `HttpOptions.Timeout`
+de 60 s, `RetryOptions.Attempts = 1` e `HttpClient.Timeout` infinito.
+O `GeminiSmokeTransport` de teste só valida método/destino, incrementa
+contadores antes de `base.SendAsync` e impõe uma geração por cenário.
+Ele não lê nem altera o corpo. A contagem de um envio não prova que a
+rede entregou o corpo ou que o provedor o processou.
+
+Testes com SDK/MAF instalados e respostas HTTP sintéticas confirmaram
+`inlineData` com bytes OGG e MIME `audio/ogg`, instrução de sistema,
+schema JSON, `responseMimeType=application/json`, `maxOutputTokens=4096`
+e ausência de tools. O transporte de smoke no mesmo caminho permitiu uma
+requisição e bloqueou zero. Testes adicionais confirmaram que o token
+de deadline e o cancelamento do chamador chegam ao `HttpMessageHandler`,
+com uma tentativa; o primeiro vira `Timeout`, o segundo propaga
+`OperationCanceledException`. Esses resultados não medem DNS, TLS,
+upload, espera do servidor, resposta ou parsing da chamada real.
+As [referências oficiais de áudio](https://ai.google.dev/gemini-api/docs/audio)
+e do [modelo](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite)
+listam entrada OGG, transcrição e saída estruturada. Isso confirma a
+compatibilidade declarada, não o sucesso da requisição da rodada.
+
+Hipóteses, em ordem de evidência:
+
+1. A espera ocorreu após a entrada no transporte: resolução/conexão,
+   envio, processamento remoto ou leitura da resposta. O contador é
+   incrementado antes do envio efetivo e não distingue essas etapas.
+2. Latência de processamento remoto é possível, inclusive para áudio;
+   não houve cabeçalho, corpo nem usage observados para comprová-la.
+3. O prompt, o schema e o limite de 4096 tokens podem afetar geração e
+   custo, mas são pequenos/suportados e o limite não obriga geração longa.
+   Nenhum `thinkingConfig` foi enviado. Não há evidência de que qualquer
+   desses itens explique os 60 s.
+4. A instrumentação de teste pode afetar a requisição apenas por sua
+   validação síncrona e pelo teto. A integração sintética passou; não há
+   sinal de bloqueio na rodada real. Um efeito de transporte/rede no
+   ambiente real continua indeterminado.
+
+O SDK documenta timeout por tentativa HTTP e continuação automática se
+uma resposta terminar com `CONTINUATION`; cada continuação pode ser
+cobrada. O teto do smoke bloquearia uma segunda requisição do mesmo
+cenário, e o contador observado foi um. Não há evidência de continuação
+na rodada. O deadline externo começa antes da validação e, por isso,
+pode vencer antes do timeout interno do SDK.
+
+Próxima instrumentação proposta, somente após revisão: medir com
+`Stopwatch` a validação local, a criação do cliente, a entrada/saída do
+MAF e, em um `DelegatingHandler` de diagnóstico, entrada no transporte e
+chegada de cabeçalhos/erro/cancelamento. Registrar apenas cenário,
+etapa, duração, classificação, status HTTP numérico e contadores; sem
+URL, headers, áudio, prompt, resposta, token ou chave. O handler HTTP
+não separa sozinho DNS, TLS, upload e processamento remoto. Nenhuma
+alteração de produção, timeout, modelo ou retry foi feita nesta análise.
+
+Validação futura proposta, **dependente de nova autorização**: no máximo
+três gerações adicionais, uma por cenário, em ordem `short`, `fictional`
+e fala degradada; parar na primeira falha e não repetir. O áudio degradado
+continua audível, então aceita transcrição fiel ou esclarecimento.
+Permanece fora dessa rodada um teste negativo de fala realmente
+incompreensível. Há possível consumo de quota/cobrança inclusive em
+timeout. Preço Standard pago publicado para `gemini-3.1-flash-lite`:
+US$ 0,50/milhão de tokens de áudio de entrada, US$ 0,25/milhão de texto
+de entrada e US$ 1,50/milhão de saída, incluindo thinking; usage real e
+regime da conta permanecem desconhecidos.
+
+Nesta análise, `dotnet test Ian.slnx --configuration Release --no-restore
+-m:1 -nodeReuse:false` compilou sem erros e aprovou **211 testes,
+ignorou 10 e falhou 0**. Os dois testes
+adicionais de cancelamento e asserções de serialização usaram somente
+HTTP sintético. Os sete PostgreSQL permanecem não executados; os outros
+três ignorados são os smokes de IA/voz sem opt-in.
+
 ## Pendências para concluir a #17
 
-1. Diagnosticar o timeout sem presumir a causa; obter nova autorização antes
+1. Localizar a etapa real do timeout; obter nova autorização antes
    de repetir `short` ou executar os dois envios restantes. A validação de
    transcrição real e nomes/números continua pendente. O caso degradado
    não comprova o comportamento com fala de fato incompreensível.
