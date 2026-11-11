@@ -196,7 +196,6 @@ public sealed class SingleCalendarMigrationTests : IAsyncLifetime
         return Convert.ToInt64(await command.ExecuteScalarAsync());
     }
 }
-
 public sealed class PostgresTheoryAttribute : TheoryAttribute
 {
     public PostgresTheoryAttribute()
@@ -205,4 +204,3 @@ public sealed class PostgresTheoryAttribute : TheoryAttribute
             Skip = "Requer banco PostgreSQL descartável explicitamente confirmado.";
     }
 }
-

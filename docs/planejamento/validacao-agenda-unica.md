@@ -1,8 +1,10 @@
 # Validação da agenda única — issue #79
 
-**Data:** 11/11/2026  
-**Branch:** `feature/single-calendar-domain`  
-**Base:** `dev` em `da48cfd`  
+**Data:** 11/11/2026
+
+**Branch:** `feature/single-calendar-domain`
+
+**Base:** `dev` em `da48cfd`
 **PostgreSQL:** 17.11
 
 ## Backup e bancos isolados

@@ -141,4 +141,3 @@ public partial class ConsolidarAgendaUnica : Migration
         throw new NotSupportedException(
             "Novos agendamentos nao possuem equipe antiga. Retorno exige reconciliacao ou restauracao revisada.");
 }
-

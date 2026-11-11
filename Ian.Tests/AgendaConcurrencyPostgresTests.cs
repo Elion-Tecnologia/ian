@@ -223,4 +223,3 @@ public sealed class AgendaConcurrencyPostgresTests
 
     private sealed class SyntheticConflictException : Exception;
 }
-
