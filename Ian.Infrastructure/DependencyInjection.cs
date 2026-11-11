@@ -11,6 +11,7 @@ using Ian.Application.AI;
 using Ian.Application.Catalogo;
 using Ian.Application.Clientes;
 using Ian.Application.Agenda;
+using Ian.Application.Conversation;
 using Ian.Infrastructure.AI;
 
 namespace Ian.Infrastructure;
@@ -63,6 +64,8 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ITelegramUpdateInboxWriter,TelegramUpdateInboxWriter>();
+        services.AddScoped<IPendingConversationRepository, PostgresPendingConversationRepository>();
+        services.AddScoped<IPendingConversation, PendingConversationService>();
 
         services.AddOptions<TelegramInboxProcessingOptions>()
             .Validate(

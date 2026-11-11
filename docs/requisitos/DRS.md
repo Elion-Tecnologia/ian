@@ -225,7 +225,7 @@ como requisito ativo.
 | PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Motor puro na #30; consultas por períodos efetivos e disponibilidade na #32. |
 | BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Sem entidade/DbSet ativo; tabela original movida para legado_mvp pela consolidação. |
 | Equipe / ExcecaoExpediente | Fora do modelo ativo; preservar dados legados | Fora do EF ativo; registros, IDs, FKs e sequences preservados em legado_mvp. |
-| SolicitacaoPendente | Estado mínimo durável e versão da operação | Entidade parcial; ciclo conversacional pendente. |
+| SolicitacaoPendente | Estado mínimo durável e versão da operação | Persistência da intenção, campos coletados/faltantes, candidatos, expiração, cancelamento e retomada; integração do diálogo permanece em #44. |
 | RegistroAuditoria / EnvioTelegram | Preservar histórico e saída privada | Entidades presentes; casos de uso pendentes. |
 | TelegramUpdateInbox / TelegramBusinessOperation | Preservar controles técnicos | Recebimento, recuperação e executor idempotente implementados. |
 
