@@ -52,23 +52,6 @@ public static class TelegramUpdateParser
             CopyObject(
                 message,
                 minimalMessage,
-                "voice",
-                "file_id",
-                "file_size",
-                "duration",
-                "mime_type");
-
-            CopyObject(
-                message,
-                minimalMessage,
-                "audio",
-                "file_id",
-                "duration",
-                "mime_type");
-
-            CopyObject(
-                message,
-                minimalMessage,
                 "document",
                 "file_id",
                 "mime_type",

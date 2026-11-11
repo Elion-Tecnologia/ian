@@ -97,10 +97,8 @@ o modelo aprovado.
 Exemplos:
 
 - `Cliente`
-- `Equipe`
 - `Agendamento`
 - `PeriodoOcupacao`
-- `ExcecaoExpediente`
 
 Nomes técnicos existentes em inglês devem permanecer
 consistentes com os componentes aos quais pertencem.
@@ -365,7 +363,7 @@ representa o horário de negócio.
 Conversões devem ocorrer de maneira explícita.
 
 Cálculos de serviços prolongados devem respeitar
-os dias locais de execução e as exceções de expediente.
+os dias locais de execução e o expediente fixo do MVP (08h–18h, todos os dias).
 
 Não converter períodos de vários dias em uma
 reserva contínua de 24 horas por dia.
@@ -380,7 +378,7 @@ Exemplos:
 
 - Formato do payload: transporte ou entrada.
 - Autorização administrativa: backend.
-- Disponibilidade da equipe: regra de negócio.
+- Disponibilidade da agenda única: regra de negócio.
 - Unicidade de telefone: domínio e banco.
 - Integridade referencial: banco de dados.
 
@@ -693,8 +691,8 @@ no mesmo commit ou Pull Request.
 Pull Requests de funcionalidades devem ter
 `dev` como destino.
 
-A integração utiliza Squash and merge após
-as validações exigidas.
+A integração exige validação e autorização explícita do usuário para merge,
+inclusive Squash and merge.
 
 ## 19. Evolução das convenções
 

@@ -1,3 +1,5 @@
+> **Histórico encerrado em 10/11/2026.** Fora do MVP textual. A #17 foi encerrada como Not planned e a PR #77 fechada sem merge. A #78 remove a infraestrutura que chegou à dev. Comandos, pendências e estimativas abaixo pertencem ao escopo anterior e não autorizam ativação ou novos smokes.
+
 # T09 — Entrada de voz: avaliação e evidências
 
 Data da consulta: 10/11/2026. Escopo: issue

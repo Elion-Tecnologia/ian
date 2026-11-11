@@ -1,11 +1,11 @@
 
 # Ian
 
-Agente de inteligência artificial para gerenciar agendas e serviços de equipes de uma loja de móveis planejados por meio do Telegram.
+Agente de inteligência artificial para gerenciar uma única agenda de uma loja de móveis planejados, operado por uma administradora no Telegram, somente por texto.
 
 ## Objetivo
 
-Permitir que um administrador consulte e organize agendamentos de clientes, equipes, horários, indisponibilidades e programações, com suporte a mensagens de texto e áudio.
+Permitir que a administradora consulte e organize clientes, serviços, agendamentos e disponibilidade em uma agenda única. O MVP utiliza exclusivamente mensagens textuais privadas; equipes, grupos Telegram, jornadas excepcionais, folgas e dashboards estão fora do escopo.
 
 ## Tecnologias planejadas
 
@@ -140,7 +140,14 @@ Com apenas a migration `InitialDatabase`, o histórico deve mostrar uma linha ap
 
 Em caso de falha de conexão, confira se o serviço do PostgreSQL está rodando e verifique host, porta, banco e usuário. Ao compartilhar o diagnóstico, mantenha a string de conexão fora da mensagem.
 
-### 6. Modelo de dados inicial
+### 6. Modelo de dados implementado — legado em transição
+
+A tabela abaixo descreve o esquema existente, não o modelo final do MVP.
+Nesta entrega nenhum arquivo Domain, mapeamento EF Core ou migration foi alterado.
+O novo `Agendamento` não terá `EquipeId`. A migração incremental e a preservação
+de dados serão revisadas na #79 antes de qualquer execução. Consulte o
+[plano detalhado](docs/planejamento/migracao-agenda-unica.md) e o
+[backlog revisado](docs/planejamento/mvp-agenda-unica.md).
 
 | Tabela | Chaves, cardinalidade e regras |
 | --- | --- |
@@ -224,7 +231,11 @@ Chamadas externas, como envios pela Telegram Bot API, não participam da transa�
 
 ### Handlers ainda não implementados
 
-Enquanto não houver processamento real de comandos, atualizações administrativas e candidatos a vínculo de grupo são preservados em `FailedPaused` com `HandlerUnavailable`.
+Enquanto não houver processamento real de comandos, atualizações administrativas textuais autorizadas são preservadas em `FailedPaused` com `HandlerUnavailable`.
+Mensagens sem texto, inclusive mídia com legenda, não executam comandos. O parser
+não persiste metadados de voz ou áudio. O contrato técnico legado de candidatos
+a grupo permanece provisoriamente no código, sem executar comandos nem vincular
+grupos; sua retirada está planejada na #79.
 
 Nenhum comando é executado por um handler provisório.
 
@@ -244,74 +255,12 @@ Testes de integração PostgreSQL usam exclusivamente um banco descartável e a 
 
 Sem essa variável, os testes de integração são ignorados, não considerados validados.
 
-## Entrada de voz (T09 — preparação para T11)
-
-O suporte de voz está preparado e testado com fakes e HTTP local, mas ainda não
-está ativado no dispatcher da API. Por decisão de implementação da issue #17,
-a integração final aguarda a #19 (MAF/Gemini) e o spike real do provedor de
-transcrição. `DeferredTelegramHandlers` continua preservando os comandos em
-`FailedPaused`; a existência dos componentes abaixo não significa que o bot
-já transcreve áudios em produção.
-
-`TelegramVoiceFileClient` implementa `getFile`, download limitado em memória e
-respostas textuais de erro/esclarecimento. `TelegramVoiceUpdateHandler` pode
-envolver o handler textual autorizado, recebendo um `IVoiceTranscriber` real.
-O decorator reaplica o mesmo filtro de autorização, preserva a identidade do
-update e só encaminha a transcrição aceita ao handler textual. O payload
-persistido da inbox não é substituído pela transcrição.
-
-As configurações não secretas estão em `TelegramVoice`:
-
-| Chave | Padrão | Intervalo aceito |
-| --- | --- | --- |
-| `MaxBytes` | 5242880 (5 MiB) | 1 a 20000000 bytes |
-| `MaxDurationSeconds` | 120 | 1 a 3600 segundos |
-| `TimeoutSeconds` | 60 | 1 a 300 segundos |
-
-Também podem ser fornecidas por `TelegramVoice__MaxBytes`,
-`TelegramVoice__MaxDurationSeconds` e `TelegramVoice__TimeoutSeconds`.
-Valores inválidos impedem a inicialização. O timeout do decorator cobre
-download e transcrição; o cliente HTTP também limita cada operação de forma
-independente quando utilizado diretamente.
-
-Tamanho e duração declarados são validados antes do download. O cliente
-verifica o tamanho retornado por `getFile`, `Content-Length` e os bytes
-efetivamente lidos, inclusive em respostas sem tamanho declarado. MIME e
-duração declarados não comprovam o conteúdo: o adaptador de transcrição deverá
-validar formato, duração efetiva e qualidade antes de retornar sucesso.
-
-Não há arquivos temporários em disco. Streams e respostas HTTP são descartados,
-e os buffers de áudio são zerados ao terminar a transcrição, inclusive em
-exceções e cancelamento. Transcrição vazia ou `NeedsClarification` produz uma
-resposta de esclarecimento, sem encaminhamento ao handler textual.
-
-Falhas conhecidas geram fallback textual e exigem nova tentativa da
-administradora; o componente não adiciona retries HTTP automáticos. Falha de
-aceitação do fallback pelo Telegram lança uma exceção sanitizada, permitindo
-a política já existente da inbox. Isso pode repetir uma resposta externa em
-caso de resultado incerto; não há garantia `exactly once` para `sendMessage`.
-Cancelamento do host/perda do lease é propagado, sem enviar fallback.
-
-A aprovação da transcrição não autoriza mutações: ambiguidade semântica,
-confirmações e regras de negócio continuam a cargo do pipeline textual/backend.
-A política desses casos ainda depende das funcionalidades futuras do agente.
-
-Para reproduzir os testes novos:
-
-```powershell
-dotnet test Ian.slnx --configuration Release --filter "FullyQualifiedName~TelegramVoice"
-```
-
-Consulte [a avaliação e as pendências do provedor](docs/spikes/voz.md) antes
-de ativar o fluxo.
-
 ## Integração MAF/Gemini (T11)
 
 `Ian.Application.AI.IAiModel` disponibiliza invocação textual com resultado
 tipado. `GeminiAiModel` usa MAF `ChatClientAgent.RunAsync`, `IChatClient` e
 o SDK oficial Google.GenAI. O chamador deverá autorizar o prompt antes da
-invocação. A integração não ativa os handlers Telegram, não transcreve
-áudio, não mantém histórico e não instala ferramentas de negócio.
+invocação. A integração não ativa os handlers Telegram, não mantém histórico e não instala ferramentas de negócio.
 
 Configuração necessária para invocar o serviço:
 
@@ -365,8 +314,9 @@ Em 10/11/2026, os dois smokes reais autorizados passaram com
 `sum_demo` com os argumentos esperados. As latências foram 1710 ms e
 21475 ms, e o uso informado totalizou 219 tokens. As variáveis temporárias
 foram removidas. Isso valida acesso e Function Calling básico nessa conta;
-não valida áudio, qualidade de negócio ou limites de quota/faturamento.
-Os sete testes PostgreSQL continuam sem execução e a PR #76 permanece Draft.
+não valida qualidade de negócio ou limites de quota/faturamento.
+A #19 foi integrada em dev; os sete testes PostgreSQL continuam documentados
+como não executados na ausência de banco descartável configurado.
 
 Detalhes técnicos, limites e evidências em
 [docs/spikes/maf-gemini.md](docs/spikes/maf-gemini.md).

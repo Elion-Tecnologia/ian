@@ -1,9 +1,9 @@
 # IA.N — Instruções para agentes de desenvolvimento
 
 ## Projeto
-O IA.N é um agente interno para gestão de agendas de equipes
-de uma loja de móveis planejados, operado por uma
-administradora pelo Telegram.
+O IA.N é um agente interno para gestão de uma única agenda de uma loja
+de móveis planejados, operado exclusivamente por uma administradora
+em conversa privada no Telegram, somente por texto.
 
 ## Fontes de contexto
 - Use a issue atribuída para determinar o escopo e os critérios de aceite.
@@ -29,8 +29,11 @@ administradora pelo Telegram.
 - O webhook deve persistir cada atualização antes de confirmar recebimento HTTP 2xx.
 - O processamento de atualizações deve ser recuperável e idempotente.
 - O modelo de IA não pode alterar dados diretamente nem ignorar regras de negócio.
-- Agendamentos ativos da mesma equipe não podem possuir períodos
+- Agendamentos ativos da agenda única não podem possuir períodos
   de ocupação conflitantes.
+- Apenas mensagens textuais privadas da administradora podem iniciar comandos.
+- Equipes, grupos Telegram, jornadas excepcionais, folgas e dashboards
+  estão fora do MVP.
 - Operações sensíveis exigem confirmação, conforme o DRS.
 - Preservar histórico e auditoria das alterações.
 
@@ -57,9 +60,16 @@ administradora pelo Telegram.
 - dev: branch de integração.
 - feature/*: desenvolvimento de funcionalidades.
 - Pull Requests para dev.
-- Squash and merge após validação.
+- Merge, inclusive Squash and merge, somente com autorização explícita.
+- Não alterar main durante tarefas de desenvolvimento em feature/*.
 
 ## Documentação
 Quando uma implementação modificar contratos, decisões técnicas
 ou comportamentos documentados, identifique os documentos e
 exemplos de API que precisam ser atualizados.
+## Transição para o MVP
+O modelo persistente legado ainda contém EquipeId, Equipe e ExcecaoExpediente.
+A proposta da agenda única está no DRS e em docs/planejamento/migracao-agenda-unica.md.
+Não confundir a proposta com implementação. A issue #79 acompanha a migração
+incremental, ainda não executada; preservar dados e histórico e nunca reescrever
+migrations aplicadas. A limpeza de voz é acompanhada pela #78.
