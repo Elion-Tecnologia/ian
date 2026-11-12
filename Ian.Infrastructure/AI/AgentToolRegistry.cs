@@ -1,10 +1,9 @@
 using Ian.Application.AI;
+using Ian.Domain.Clientes;
 using Ian.Infrastructure.Telegram;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using Ian.Domain.Clientes;
 
 namespace Ian.Infrastructure.AI;
 
@@ -16,121 +15,82 @@ public interface IAgentToolRegistry
 public sealed class AgentToolRegistry(
     IAgentToolBackend backend,
     IOptions<TelegramOptions> telegram,
-    AgentExecutionBudget budget) : IAgentToolRegistry
+    AgentExecutionBudget budget,
+    AgentTurnContext? turn = null) : IAgentToolRegistry
 {
     public IReadOnlyList<AIFunction> CreateTools(AgentToolCaller caller)
     {
         ArgumentNullException.ThrowIfNull(caller);
         return
         [
-            CreateFunction((string? nome = null, string? telefone = null, string? enderecoPrincipal = null, CancellationToken ct = default) =>
-                InvokeAsync(new CadastrarClienteToolRequest(nome, telefone, enderecoPrincipal), caller, budget, ct),
-                "cadastrar_cliente", "Solicita cadastro de cliente com nome, telefone e endereço opcional."),
-            CreateFunction((DateOnly? dataInicial = null, DateOnly? dataFinal = null, long? clienteId = null, long? agendamentoId = null, CancellationToken ct = default) =>
-                InvokeAsync(new ConsultarAgendaToolRequest(dataInicial, dataFinal, clienteId, agendamentoId), caller, budget, ct),
-                "consultar_agenda", "Consulta agendamentos por período ou identificador de cliente/agendamento."),
-            CreateFunction((DateOnly? data = null, TimeOnly? horario = null, int? duracao = null, string? unidadeDuracao = null, CancellationToken ct = default) =>
-                InvokeAsync(new VerificarDisponibilidadeToolRequest(data, horario, duracao, unidadeDuracao), caller, budget, ct),
-                "verificar_disponibilidade", "Verifica disponibilidade para uma data, horário e duração."),
-            CreateFunction((string? nomeCliente = null, string? telefoneCliente = null, long? tipoServicoId = null, DateOnly? data = null, TimeOnly? horario = null, string? modalidade = null, int? duracao = null, string? unidadeDuracao = null, CancellationToken ct = default) =>
-                InvokeAsync(new CriarAgendamentoToolRequest(nomeCliente, telefoneCliente, tipoServicoId, data, horario, modalidade, duracao, unidadeDuracao), caller, budget, ct),
-                "criar_agendamento", "Solicita criação de agendamento com dados de cliente e serviço."),
-            CreateFunction((long? agendamentoId = null, string? operacao = null, DateOnly? data = null, TimeOnly? horario = null, string? observacoes = null, CancellationToken ct = default) =>
-                InvokeAsync(new AlterarAgendamentoToolRequest(agendamentoId, operacao, data, horario, observacoes), caller, budget, ct),
-                "alterar_agendamento", "Solicita alteração de agendamento; operações sensíveis exigem confirmação do backend.")
+            AIFunctionFactory.Create((string? nome = null, string? telefone = null, string? enderecoPrincipal = null, CancellationToken ct = default) =>
+                InvokeAsync(new CadastrarClienteToolRequest(nome, telefone, enderecoPrincipal), caller, ct),
+                "cadastrar_cliente", "Cadastra um cliente por nome e telefone com DDD. Argumentos parciais são persistidos e os dados ausentes são solicitados."),
+            AIFunctionFactory.Create((string? nome = null, string? telefone = null, CancellationToken ct = default) =>
+                InvokeAsync(new LocalizarClienteToolRequest(nome, telefone), caller, ct),
+                "localizar_cliente", "Localiza clientes por nome ou telefone, sem selecionar automaticamente entre vários IDs."),
+            AIFunctionFactory.Create((CancellationToken ct = default) => InvokeAsync(new ListarServicosToolRequest(), caller, ct),
+                "listar_servicos", "Lista IDs e padrões reais dos serviços disponíveis. Nunca invente um ID."),
+            AIFunctionFactory.Create((DateOnly? dataInicial = null, DateOnly? dataFinal = null, long? clienteId = null, long? agendamentoId = null, CancellationToken ct = default) =>
+                InvokeAsync(new ConsultarAgendaToolRequest(dataInicial, dataFinal, clienteId, agendamentoId), caller, ct),
+                "consultar_agenda", "Consulta programação por dia/período ou ID de cliente/agendamento; dados reais e versão são validados pelo backend."),
+            AIFunctionFactory.Create((DateOnly? data = null, TimeOnly? horario = null, int? duracao = null, string? unidadeDuracao = null, CancellationToken ct = default) =>
+                InvokeAsync(new VerificarDisponibilidadeToolRequest(data, horario, duracao, unidadeDuracao), caller, ct),
+                "verificar_disponibilidade", "Verifica ocupações reais. Unidade: Minutos ou DiasCorridos. DiasCorridos exige 08h–18h em cada data."),
+            AIFunctionFactory.Create((string? nomeCliente = null, string? telefoneCliente = null, long? tipoServicoId = null, DateOnly? data = null, TimeOnly? horario = null, string? modalidade = null, int? duracao = null, string? unidadeDuracao = null, string? enderecoServico = null, string? observacoes = null, long? clienteId = null, CancellationToken ct = default) =>
+                InvokeAsync(new CriarAgendamentoToolRequest(nomeCliente, telefoneCliente, tipoServicoId, data, horario, modalidade, duracao, unidadeDuracao, enderecoServico, observacoes, clienteId), caller, ct),
+                "criar_agendamento", "Cria um agendamento ou coleta dados parciais. Padrões de duração, unidade e modalidade vêm do serviço. Modalidade: Interno, Externo ou Remoto. Unidade: Minutos ou DiasCorridos. Endereço obrigatório para Externo. Não corrija início divergente em DiasCorridos sem esclarecer com a administradora."),
+            AIFunctionFactory.Create((long? agendamentoId = null, string? operacao = null, DateOnly? data = null, TimeOnly? horario = null, string? observacoes = null, long? versaoEsperada = null, long? tipoServicoId = null, string? modalidade = null, int? duracao = null, string? unidadeDuracao = null, string? enderecoServico = null, bool? alterarEndereco = null, bool? alterarObservacoes = null, long? clienteId = null, DateOnly? dataBusca = null, CancellationToken ct = default) =>
+                InvokeAsync(new AlterarAgendamentoToolRequest(agendamentoId, operacao, data, horario, observacoes, versaoEsperada, tipoServicoId, modalidade, duracao, unidadeDuracao, enderecoServico, alterarEndereco, alterarObservacoes, clienteId, dataBusca), caller, ct),
+                "alterar_agendamento", "Operações: editar, reagendar, concluir, cancelar. Reutiliza versão e seleção explícita. Para buscar alvo sem ID, informe clienteId ou dataBusca. Cancelar apenas prepara confirmação: a aceitação é feita por texto com código, fora do modelo. Flags alterarEndereco/alterarObservacoes permitem limpar valores explicitamente.")
         ];
     }
 
-    private static AIFunction CreateFunction(Delegate function, string name, string description) =>
-        AIFunctionFactory.Create(function, name, description, new JsonSerializerOptions(AIJsonUtilities.DefaultOptions)
-        {
-            Converters = { new JsonStringEnumConverter() }
-        });
-
-    private async Task<AgentToolResult> InvokeAsync(AgentToolRequest request, AgentToolCaller caller, AgentExecutionBudget budget, CancellationToken cancellationToken)
+    private async Task<AgentToolResult> InvokeAsync(AgentToolRequest request, AgentToolCaller caller, CancellationToken cancellationToken)
     {
-        var expectedAdminId = telegram.Value.AdministratorUserId;
-        if (expectedAdminId <= 0 || caller.UserId != expectedAdminId || caller.ChatId != expectedAdminId ||
-            !caller.IsPrivateChat || !caller.IsHuman || !caller.HasText)
+        AgentToolResult Record(AgentToolResult result)
         {
-            return AgentToolResult.Failed("Solicitação não autorizada.");
+            if (turn is not null)
+            {
+                turn.LastResult = result;
+                if (request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest || result.Outcome == AgentToolOutcome.Ambiguous)
+                    turn.PendingResult = result;
+            }
+            return result;
         }
-
-        var missing = MissingFields(request);
-        if (missing is not null) return AgentToolResult.Missing($"Informe: {missing}.");
-        var invalid = InvalidFields(request);
-        if (invalid is not null) return AgentToolResult.Failed($"Dados inválidos: {invalid}.");
-        if (!budget.TryStartToolCall()) return AgentToolResult.Failed("Limite de chamadas de ferramentas atingido.");
-
+        if (!Ian.Application.Conversation.OperationConfirmationPolicy.IsAuthorized(caller, telegram.Value.AdministratorUserId))
+            return Record(AgentToolResult.Failed("Solicitação não autorizada."));
+        if (!budget.TryStartToolCall()) return Record(AgentToolResult.Failed("Limite de chamadas de ferramentas atingido."));
+        if (Invalid(request)) return Record(AgentToolResult.Failed("Dados inválidos. Use IDs positivos, telefone com DDD e valores dentro dos limites."));
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(AgentExecutionLimits.ToolTimeoutSeconds));
         try
         {
             var result = await backend.ExecuteAsync(request, timeout.Token);
-            if (result is null) return AgentToolResult.Failed("A operação não retornou um resultado válido.");
-            var bounded = result with { Message = Limit(result.Message) };
-            return ResultFitsLimit(bounded)
-                ? bounded
-                : AgentToolResult.Failed("O resultado excedeu o limite permitido.");
+            if (result is null) return Record(AgentToolResult.Failed("A operação não retornou resultado válido."));
+            if (JsonSerializer.Serialize(result).Length > AgentExecutionLimits.MaxToolResultCharacters)
+                return Record(AgentToolResult.Failed("O resultado excedeu o limite permitido. Refine a consulta."));
+            return Record(result);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            return AgentToolResult.Failed("A operação excedeu o tempo limite.");
-        }
-        catch (Exception)
-        {
-            return AgentToolResult.Failed("Não foi possível concluir a operação.");
-        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) { return Record(AgentToolResult.Failed("A operação excedeu o tempo limite. Consulte a agenda antes de repetir.")); }
+        catch (Exception) { return Record(AgentToolResult.Failed("Não foi possível concluir a operação. Consulte a agenda antes de repetir.")); }
     }
 
-    private static string? MissingFields(AgentToolRequest request) => request switch
+    private static bool Invalid(AgentToolRequest request) => request switch
     {
-        CadastrarClienteToolRequest x when Blank(x.Nome) || Blank(x.Telefone) => Join(Blank(x.Nome) ? "nome" : null, Blank(x.Telefone) ? "telefone" : null),
-        ConsultarAgendaToolRequest x when x.AgendamentoId is null && x.ClienteId is null && x.DataInicial is null => "data inicial, cliente ou agendamento",
-        VerificarDisponibilidadeToolRequest x when x.Data is null || x.Duracao is null || Blank(x.UnidadeDuracao) => Join(x.Data is null ? "data" : null, x.Duracao is null ? "duração" : null, Blank(x.UnidadeDuracao) ? "unidade de duração" : null),
-        CriarAgendamentoToolRequest x when Blank(x.NomeCliente) || Blank(x.TelefoneCliente) || x.TipoServicoId is null || x.Data is null || Blank(x.Modalidade) || x.Duracao is null || Blank(x.UnidadeDuracao) => Join(Blank(x.NomeCliente) ? "nome do cliente" : null, Blank(x.TelefoneCliente) ? "telefone do cliente" : null, x.TipoServicoId is null ? "serviço" : null, x.Data is null ? "data" : null, Blank(x.Modalidade) ? "modalidade" : null, x.Duracao is null ? "duração" : null, Blank(x.UnidadeDuracao) ? "unidade de duração" : null),
-        AlterarAgendamentoToolRequest x when x.AgendamentoId is null || Blank(x.Operacao) => Join(x.AgendamentoId is null ? "agendamento" : null, Blank(x.Operacao) ? "operação" : null),
-        _ => null
+        CadastrarClienteToolRequest x => Long(x.Nome, 200) || Long(x.EnderecoPrincipal, 2000) || InvalidPhone(x.Telefone),
+        LocalizarClienteToolRequest x => Long(x.Nome, 200) || InvalidPhone(x.Telefone),
+        ConsultarAgendaToolRequest x => x.ClienteId is <= 0 || x.AgendamentoId is <= 0 || x.DataFinal < x.DataInicial ||
+            x.DataInicial is { } a && x.DataFinal is { } b && b.DayNumber - a.DayNumber > 31,
+        CriarAgendamentoToolRequest x => x.TipoServicoId is <= 0 || x.ClienteId is <= 0 || x.Duracao is <= 0 or > 720 ||
+            Long(x.NomeCliente, 200) || InvalidPhone(x.TelefoneCliente) || Long(x.EnderecoServico, 2000) || Long(x.Observacoes, 2000),
+        AlterarAgendamentoToolRequest x => x.AgendamentoId is <= 0 || x.VersaoEsperada is <= 0 || x.ClienteId is <= 0 ||
+            x.TipoServicoId is <= 0 || x.Duracao is <= 0 or > 720 || Long(x.EnderecoServico, 2000) || Long(x.Observacoes, 2000),
+        VerificarDisponibilidadeToolRequest x => x.Duracao is <= 0 or > 720,
+        _ => false
     };
-
-    private static string? InvalidFields(AgentToolRequest request) => request switch
-    {
-        CadastrarClienteToolRequest x when x.Nome?.Length > 200 => "nome",
-        CadastrarClienteToolRequest x when x.Telefone?.Length > 32 || !NormalizadorTelefoneBrasileiro.Normalizar(x.Telefone).Valido => "telefone",
-        ConsultarAgendaToolRequest x when x.ClienteId is <= 0 || x.AgendamentoId is <= 0 => "identificador",
-        ConsultarAgendaToolRequest x when x.DataFinal < x.DataInicial || x.DataInicial is { } start && x.DataFinal is { } end && end.DayNumber - start.DayNumber > 366 => "intervalo de datas",
-        VerificarDisponibilidadeToolRequest x when x.Duracao is <= 0 or > 720 => "duração",
-        VerificarDisponibilidadeToolRequest x when x.UnidadeDuracao is not null && x.UnidadeDuracao is not ("DiasCorridos" or "Horas") => "unidade de duração",
-        CriarAgendamentoToolRequest x when x.TipoServicoId is <= 0 || x.Duracao is <= 0 or > 720 => "serviço ou duração",
-        CriarAgendamentoToolRequest x when x.NomeCliente?.Length > 200 || x.TelefoneCliente?.Length > 32 || !NormalizadorTelefoneBrasileiro.Normalizar(x.TelefoneCliente).Valido => "dados do cliente",
-        CriarAgendamentoToolRequest x when x.Modalidade is not null && x.Modalidade is not ("NaLoja" or "Externo") => "modalidade",
-        CriarAgendamentoToolRequest x when x.UnidadeDuracao is not null && x.UnidadeDuracao is not ("DiasCorridos" or "Horas") => "unidade de duração",
-        AlterarAgendamentoToolRequest x when x.AgendamentoId is <= 0 || x.Observacoes?.Length > 2000 => "identificador ou observações",
-        _ => null
-    };
-
-    private static bool Blank(string? value) => string.IsNullOrWhiteSpace(value);
-    private static string Join(params string?[] fields) => string.Join(", ", fields.Where(field => field is not null));
-    private static string Limit(string? message) => string.IsNullOrWhiteSpace(message)
-        ? "A operação foi concluída sem uma mensagem de resultado válida."
-        : message.Length <= AgentExecutionLimits.MaxToolResultCharacters
-            ? message
-            : message[..AgentExecutionLimits.MaxToolResultCharacters];
-
-    private static bool ResultFitsLimit(AgentToolResult result)
-    {
-        try
-        {
-            return JsonSerializer.Serialize(result).Length <= AgentExecutionLimits.MaxToolResultCharacters;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
+    private static bool Long(string? value, int maximum) => value?.Length > maximum;
+    private static bool InvalidPhone(string? phone) => !string.IsNullOrWhiteSpace(phone) &&
+        (phone.Length > 32 || !NormalizadorTelefoneBrasileiro.Normalizar(phone).Valido);
 }

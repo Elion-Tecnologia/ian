@@ -138,7 +138,7 @@ efeitos de escrita. A #33 disponibiliza IEdicaoAgendamento: exige ID/versão, re
 Agendado sob lock, revalida conflitos e substitui ocupações atomicamente, com
 incremento de versão, idempotência e auditoria mínima. Edição sem endereço
 explícito preserva o snapshot. Busca ambígua reutiliza candidatos persistidos da
-#21 e consulta da #32; integração com Tools fica na #44.
+#21 e consulta da #32; integração com Tools implementada na #44.
 
 A #35 expõe IEncerramentoAgendamento para conclusão por ID/versão e cancelamento
 com confirmação obrigatória da #22. Estado, versão, vínculo idempotente e auditoria
@@ -202,12 +202,15 @@ Para criação de agendamentos, a chave estável implementada é `agendamento:cr
 `CriacaoAgendamentoApplication` executa cliente novo, agendamento, períodos e o
 vínculo da operação na mesma transação protegida pelo advisory lock. Em uma
 reentrega, o vínculo recupera o mesmo ID confirmado sem repetir a escrita.
-Os futuros handlers administrativos devem invocar esse caso de uso, sem acessar
-o `IanDbContext` diretamente.
+O handler da #44 invoca esse caso de uso pelas Tools/Application, sem fornecer
+acesso direto do modelo ao banco.
 
 Essa abordagem impede repetir a mesma operação de banco para o mesmo update e chave.
 
-Ela não impede automaticamente duplicidades causadas por updates diferentes que representem a mesma intenção. Esses casos exigirão uma chave de solicitação ou confirmação de negócio persistente.
+A #44 persiste a intenção e seu update de execução para recuperar uma criação
+confirmada sem duplicá-la em outro turno. Confirmação de cancelamento é vinculada
+a um desafio consumido na transação. Um novo pedido independente continua sendo
+uma nova solicitação; não há deduplicação semântica pelo modelo.
 
 ### Limites de garantia
 
@@ -215,17 +218,42 @@ O recebimento durável e a idempotência transacional não significam execução
 
 Se uma operação de banco for confirmada e o processo cair antes de marcar o update como `Completed`, o update poderá ser reexecutado. Nesse cenário, a chave de idempotência impede repetir a alteração protegida.
 
-Chamadas externas, como envios pela Telegram Bot API, não participam da transação PostgreSQL e não recebem garantia de `exactly once`. A política de envio e de repetição será implementada nas tarefas específicas de outbound.
+Chamadas externas não participam da transação PostgreSQL nem recebem garantia
+de exactly once. A #18 limita retries de transporte; a #44 persiste a resposta e
+retoma apenas envios com recusa conhecida. Envios incertos não são reenviados.
 
-### Handlers ainda não implementados
+### Diálogo textual integrado (#44)
 
-Enquanto não houver processamento real de comandos, atualizações administrativas textuais autorizadas são preservadas em `FailedPaused` com `HandlerUnavailable`.
-Mensagens sem texto, inclusive mídia com legenda, não executam comandos. O parser
-não persiste metadados de voz ou áudio. Os contratos e projeções exclusivos de associação de grupos foram removidos na #79. Eventos de grupos, inclusive históricos, são negados sem executar comandos.
+O handler ativo conecta Telegram autorizado → MAF/Gemini → sete Tools tipadas →
+casos de uso → PostgreSQL → resposta privada. Inclui cadastro/localização de
+clientes, serviços, agenda/disponibilidade, criar, editar, reagendar, concluir e
+cancelar. Interno/Externo/Remoto e Minutos/DiasCorridos seguem os nomes do Domain.
+Padrões vêm do catálogo; endereço externo e horário em Minutos são coletados.
+DiasCorridos às 10h exige esclarecimento e não cria reservas parciais.
 
-Nenhum comando é executado por um handler provisório.
+Pedidos incompletos persistem na #21 e retomam após reinício. Responda
+cliente <ID> ou agendamento <ID> para escolher entre candidatos. /descartar
+abandona somente a intenção pendente. Cancelar exige o texto confirmar <código>
+apresentado pelo backend; um sim isolado não aceita o desafio. O modelo não
+recebe uma Tool para confirmar nem para executar SQL. Respostas de sucesso são
+produzidas a partir do resultado persistido, nunca do texto livre do modelo.
 
-Após a implementação do handler correspondente, os registros devem ser reativados de maneira controlada.
+A migration PersistirTurnosAgente adiciona telegram_agent_turns para congelar o
+comando por update, preservar a resposta e registrar aceitação/falha/incerteza de
+envio. Foi validada apenas em banco descartável; aplicar em outro ambiente exige
+autorização específica. Não foi aplicada à origem de desenvolvimento. Uma queda
+após commit recupera o ID confirmado sem reinterpretar o comando. Uma queda após
+início do envio é tratada como incerta, sem reenvio automático.
+
+Limites: 6 iterações MAF, 8 Tools, 15s por Tool, 60s por execução, prompt de
+16.000 caracteres e resposta privada de até 4.000. Chamadas reais Gemini exigem
+autorização para quota/cobrança; testes usam integrações simuladas. Homologação
+com Telegram/Gemini reais permanece na #59. Updates antigos pausados com
+HandlerUnavailable exigem reativação controlada; não foram reativados pela #44.
+
+Mensagens sem texto, mídia com legenda, bots e grupos não executam comandos.
+O parser não persiste metadados de voz/áudio; contratos exclusivos de grupos
+permanecem fora do MVP.
 
 ### Observabilidade
 
@@ -254,7 +282,8 @@ Evidências da #79 em docs/planejamento/validacao-agenda-unica.md.
 `Ian.Application.AI.IAiModel` disponibiliza invocação textual com resultado
 tipado. `GeminiAiModel` usa MAF `ChatClientAgent.RunAsync`, `IChatClient` e
 o SDK oficial Google.GenAI. O chamador deverá autorizar o prompt antes da
-invocação. A integração não ativa os handlers Telegram, não mantém histórico e não instala ferramentas de negócio.
+invocação. Esse adaptador textual permanece isolado, enquanto a #44 usa
+GeminiAgendaAgentRunner para o handler, Tools e contexto mínimo persistido.
 
 Configuração necessária para invocar o serviço:
 
@@ -267,7 +296,8 @@ Configuração necessária para invocar o serviço:
 Use `Gemini__ApiKey`, `Gemini__Model` e `Gemini__TimeoutSeconds` para
 variáveis de ambiente. A validação ocorre na invocação e produz
 `InvalidConfiguration` sem expor valores, preservando o startup da API
-enquanto a integração ainda não está ativada.
+mesmo sem chave Gemini configurada. O handler ativo responde com falha sanitizada
+nessa situação, sem executar negócio.
 
 Para cadastrar a chave em Development pelo PowerShell, sem exibi-la nem
 incluí-la em argumentos/histórico, use entrada oculta e JSON por stdin:

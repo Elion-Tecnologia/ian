@@ -123,7 +123,7 @@ public sealed class PendingConversationService(IPendingConversationRepository re
     }
 
     private static bool IsValidCollected(IReadOnlyDictionary<string, string> fields) =>
-        fields.Count <= 32 && fields.All(pair => ValidName(pair.Key) && pair.Value is not null && pair.Value.Length <= 2_000) &&
+        fields.Count <= 32 && fields.All(pair => ValidName(pair.Key) && pair.Value is not null && pair.Value.Length <= (pair.Key == "request" ? 8_000 : 2_000)) &&
         SerializedLength(fields) <= MaxSerializedStateLength;
 
     private static bool IsValidNames(IEnumerable<string> names) =>

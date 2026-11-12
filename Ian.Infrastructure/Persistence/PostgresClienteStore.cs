@@ -7,6 +7,9 @@ namespace Ian.Infrastructure.Persistence;
 
 public sealed class PostgresClienteStore(IanDbContext context) : IClienteStore
 {
+    public Task<Cliente?> LocalizarPorIdAsync(long id, CancellationToken cancellationToken = default) =>
+        context.Clientes.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, cancellationToken);
+
     private const string IndiceTelefoneUnico = "IX_clientes_TelefoneNormalizado";
 
     public async Task<Cliente?> LocalizarParaCadastroAsync(

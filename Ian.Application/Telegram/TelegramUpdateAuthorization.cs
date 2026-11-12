@@ -24,7 +24,7 @@ public static class TelegramUpdateAuthorization
         }
 
         // Somente conversas privadas podem executar comandos.
-        if (chatType != "private")
+        if (chatType != "private" || !TryGetInt64(chat, "id", out var chatId) || chatId != administratorUserId)
         {
             return TelegramAuthorizationDecision.Denied;
         }

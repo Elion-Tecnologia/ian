@@ -12,6 +12,9 @@ public sealed class TelegramAuthorizationTests
         """{"update_id":1,"message":{"from":{"id":42,"is_bot":false},"chat":{"id":42,"type":"private"},"text":"Agendar visita"}}""",
         TelegramAuthorizationDecision.Authorized)]
     [InlineData(
+        """{"update_id":20,"message":{"from":{"id":42,"is_bot":false},"chat":{"id":999,"type":"private"},"text":"Cancelar"}}""",
+        TelegramAuthorizationDecision.Denied)]
+    [InlineData(
         """{"update_id":2,"message":{"from":{"id":99,"is_bot":false},"chat":{"id":99,"type":"private"},"text":"Cancelar"}}""",
         TelegramAuthorizationDecision.Denied)]
     [InlineData(

@@ -86,3 +86,11 @@ Testes de infraestrutura não comprovam esses fluxos funcionais.
 Testes PostgreSQL exigem conexão descartável local ian_t<numero>_tests e
 IAN_TEST_POSTGRES_DATABASE com o mesmo nome; nunca apontar para a origem
 ou a cópia de validação da restauração.
+
+A #44 integra o handler Telegram autorizado, MAF/Gemini, sete Tools e os casos
+de uso; o modelo nunca fornece ator, update_id ou aceite de confirmação.
+Seleção exige texto com ID; cancelamento exige confirmar <código> fora do modelo.
+PersistirTurnosAgente adiciona diário por update para recuperação e estado de
+resposta/envio. Essa migration foi exercitada apenas em ian_t44_tests; aplicação
+em outro ambiente continua exigindo autorização específica. Envios incertos não
+são reenviados automaticamente. Homologação com serviços reais pertence à #59.

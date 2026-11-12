@@ -7,6 +7,12 @@ public sealed class ClientesApplication(IClienteStore store) : IClientes
 {
     private const int LimiteBuscaNome = 10;
 
+    public async Task<ResultadoLocalizacaoCliente> LocalizarPorIdAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var cliente = await store.LocalizarPorIdAsync(id, cancellationToken);
+        return cliente is null ? Nenhum() : new(EstadoLocalizacaoCliente.Unico, [Projetar(cliente)], false, null);
+    }
+
     public async Task<PreparacaoCadastroCliente> PrepararCadastroAsync(
         CadastrarClienteSolicitacao solicitacao,
         CancellationToken cancellationToken = default)
