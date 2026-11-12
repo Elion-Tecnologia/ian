@@ -222,8 +222,30 @@ O recebimento durável e a idempotência transacional não significam execução
 Se uma operação de banco for confirmada e o processo cair antes de marcar o update como `Completed`, o update poderá ser reexecutado. Nesse cenário, a chave de idempotência impede repetir a alteração protegida.
 
 Chamadas externas não participam da transação PostgreSQL nem recebem garantia
-de exactly once. A #18 limita retries de transporte; a #44 persiste a resposta e
-retoma apenas envios com recusa conhecida. Envios incertos não são reenviados.
+de exactly once. A #18 limita retries de transporte; a #51 agenda retentativas
+duráveis da resposta persistida, sem repetir o modelo ou o negócio. Envios
+incertos não são reenviados.
+
+`telegram_agent_turns` funciona também como outbox, com chave única
+`private-reply:<update_id>:<administradora_id>`. A resposta é congelada e o worker
+recupera envios pendentes após reinício. `telegram_reply_attempts` registra somente
+tentativa, horários, resultado, contagem de chamadas, `retry_after` e `message_id`;
+não duplica texto nem cria auditoria geral (#42).
+
+Há até três despachos persistidos. Rejeição 429 agenda backoff de 5s/10s,
+respeitando o maior `retry_after`, que também bloqueia respostas posteriores.
+Cada despacho reutiliza o cliente #18 (até três chamadas por padrão, portanto
+no máximo nove chamadas por resposta; somente 429 conhecido permite repetição).
+Falha transitória comprovadamente anterior à chamada também admite retentativa;
+timeout, 5xx, resultado inválido ou queda durante envio ficam `Uncertain`.
+Uma lease de dois minutos protege a tentativa em curso; expiração não autoriza
+reenvio. `Accepted` exige ID confirmado; falha ao persistir o resultado não
+autoriza repetir o envio. A autorização privada é revalidada em cada despacho.
+
+A migration `PersistirRetentativasRespostas` preserva respostas anteriores e
+só retoma recusas conhecidas; seu rollback recusa eliminar respostas/resultados.
+Foi validada em banco descartável. Aplicá-la em qualquer banco existente exige
+autorização específica. Nenhuma chamada real ou implantação integra essa validação.
 
 ### Diálogo textual integrado (#44)
 

@@ -29,8 +29,10 @@ public sealed class TelegramInboxBackgroundService(
 
                 var processed = await consumer.ProcessNextAsync(
                     stoppingToken);
+                var delivered = await scope.ServiceProvider.GetRequiredService<TelegramReplyOutboxConsumer>()
+                    .ProcessNextAsync(stoppingToken);
 
-                if (!processed)
+                if (!processed && !delivered)
                 {
                     await Task.Delay(
                         options.Value.IdleDelay,

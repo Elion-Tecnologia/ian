@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Ian.Infrastructure.Persistence;
 
-public sealed class PostgresAgentTurnStore(IanDbContext db, NpgsqlDataSource dataSource) : IAgentTurnStore
+public sealed class PostgresAgentTurnStore(IanDbContext db, NpgsqlDataSource dataSource, TimeProvider? clock = null) : IAgentTurnStore
 {
     public async Task<IAsyncDisposable> LockAsync(long userId, CancellationToken cancellationToken)
     {
@@ -26,8 +26,8 @@ public sealed class PostgresAgentTurnStore(IanDbContext db, NpgsqlDataSource dat
     public async Task<TelegramAgentTurn> GetOrCreateAsync(long updateId, long userId, CancellationToken cancellationToken)
     {
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO telegram_agent_turns ("UpdateId", "TelegramUserId", "SendState", "SendAttempts")
-            VALUES ({updateId}, {userId}, 'Pending', 0) ON CONFLICT ("UpdateId") DO NOTHING
+            INSERT INTO telegram_agent_turns ("UpdateId", "TelegramUserId", "LogicalReplyKey", "SendState", "SendAttempts")
+            VALUES ({updateId}, {userId}, {FormattableString.Invariant($"private-reply:{updateId}:{userId}")}, 'Pending', 0) ON CONFLICT ("UpdateId") DO NOTHING
             """, cancellationToken);
         var turn = await db.Set<TelegramAgentTurn>().AsNoTracking().SingleAsync(t => t.UpdateId == updateId, cancellationToken);
         if (turn.TelegramUserId != userId) throw new InvalidOperationException("Ator do turno inválido.");
@@ -83,23 +83,8 @@ public sealed class PostgresAgentTurnStore(IanDbContext db, NpgsqlDataSource dat
 
     public Task SaveResponseAsync(long updateId, string response, CancellationToken cancellationToken) =>
         db.Set<TelegramAgentTurn>().Where(t => t.UpdateId == updateId && t.ResponseText == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.ResponseText, response), cancellationToken);
-
-    public async Task<bool> BeginSendAsync(long updateId, CancellationToken cancellationToken)
-    {
-        // A crash after sending begins leaves delivery uncertain. Never resend that reply blindly.
-        await db.Set<TelegramAgentTurn>().Where(t => t.UpdateId == updateId && t.SendState == "Sending")
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.SendState, "Uncertain"), cancellationToken);
-        return await db.Set<TelegramAgentTurn>().Where(t => t.UpdateId == updateId &&
-                (t.SendState == "Pending" || t.SendState == "Failed") && t.SendAttempts < 3 && t.ResponseText != null)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.SendState, "Sending")
-                .SetProperty(t => t.SendAttempts, t => t.SendAttempts + 1), cancellationToken) == 1;
-    }
-
-    public Task FinishSendAsync(long updateId, string state, long? messageId, string status, CancellationToken cancellationToken) =>
-        db.Set<TelegramAgentTurn>().Where(t => t.UpdateId == updateId)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.SendState, state)
-                .SetProperty(t => t.TelegramMessageId, messageId).SetProperty(t => t.SendStatus, status), cancellationToken);
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.ResponseText, response)
+                .SetProperty(t => t.NextSendAttemptAtUtc, (clock ?? TimeProvider.System).GetUtcNow()), cancellationToken);
 
     private sealed class UserLock(NpgsqlConnection connection, long userId) : IAsyncDisposable
     {

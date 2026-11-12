@@ -39,9 +39,10 @@ falha do modelo. O caminho esperado é:
 - `inbox_failed`/`inbox_cancelled`: processamento/lease/reinício; conferir retry
   ou pausa da inbox. Não reexecutar escritas manualmente sem verificar o diário.
 - `send_finished state=Failed`: envio recusado; conferir resultado e tentativas.
-  Rate limit pode retomar somente a resposta persistida.
+  `retry_scheduled=True` indica retomada pela outbox, respeitando backoff e
+  retry_after; a inbox pode já estar Completed. Não exige nova mensagem ou modelo.
 - `send_finished state=Uncertain` ou `send_skipped`: entrega incerta, já iniciada,
-  concluída ou limite de tentativas. Não reenviar cegamente; não há exactly once
+  concluída, aguardando backoff ou limite de tentativas. Não reenviar cegamente; não há exactly once
   no Telegram. `Accepted` comprova aceitação pela API, não leitura pela pessoa.
 
 O Gemini faz uma interpretação estruturada antes das Tools e escolhe o ato de

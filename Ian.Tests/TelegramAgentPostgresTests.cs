@@ -504,7 +504,7 @@ public sealed partial class TelegramAgentPostgresTests
             builder.UseEnvironment("Testing");
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Telegram:BotToken"] = "synthetic-token", ["Telegram:AdministratorUserId"] = "42",
+                ["Telegram:BotToken"] = "synthetic-token", ["Telegram:AdministratorUserId"] = Faults.AdministratorUserId.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["Telegram:WebhookSecret"] = "synthetic-secret", ["ConnectionStrings:Default"] = PostgresTestDatabase.ConnectionString,
                 ["Gemini:ApiKey"] = "synthetic-key", ["Gemini:Model"] = "gemini-3.1-flash-lite",
                 ["Telegram:Sending:MaxAttempts"] = "1"
@@ -523,12 +523,14 @@ public sealed partial class TelegramAgentPostgresTests
                     () => Faults.UseSdk ? sp.GetRequiredService<GeminiChatClientFactory>().GetClient() : Model, sp.GetRequiredService<IAgentToolRegistry>(),
                     sp.GetRequiredService<AgentTurnContext>(), sp.GetRequiredService<ILogger<GeminiAgendaAgentRunner>>()));
                 services.RemoveAll<ITelegramTextSender>();
-                services.AddSingleton<ITelegramTextSender>(sp => new TelegramTextClient(new HttpClient(new TelegramHttp(Transport)),
+                services.AddSingleton<ITelegramTextSender>(sp => Faults.Sender ?? new TelegramTextClient(new HttpClient(new TelegramHttp(Transport)),
                     sp.GetRequiredService<IOptions<TelegramOptions>>(), sp.GetRequiredService<IOptions<TelegramTextSendingOptions>>(),
                     Clock, sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TelegramTextClient>>()));
                 services.RemoveAll<IAgentTurnStore>();
                 services.AddScoped<IAgentTurnStore>(sp => new FaultingTurns(new PostgresAgentTurnStore(
-                    sp.GetRequiredService<IanDbContext>(), sp.GetRequiredService<Npgsql.NpgsqlDataSource>()), Faults));
+                    sp.GetRequiredService<IanDbContext>(), sp.GetRequiredService<Npgsql.NpgsqlDataSource>(), Clock), Faults));
+                services.RemoveAll<ITelegramReplyOutbox>();
+                services.AddScoped<ITelegramReplyOutbox>(sp => new FaultingOutbox(new PostgresTelegramReplyOutbox(sp.GetRequiredService<IanDbContext>()), Faults));
                 services.RemoveAll<IAgendaCriacaoStore>();
                 services.AddScoped<IAgendaCriacaoStore>(sp => new FaultingCreation(sp.GetRequiredService<IanDbContext>(), Faults));
                 services.RemoveAll<IAgendaEdicaoStore>();
@@ -561,9 +563,24 @@ public sealed partial class TelegramAgentPostgresTests
         public async Task<bool> ProcessAsync()
         {
             await using var scope = _factory.Services.CreateAsyncScope();
-            return await scope.ServiceProvider.GetRequiredService<TelegramInboxConsumer>().ProcessNextAsync(default);
+            var processed = await scope.ServiceProvider.GetRequiredService<TelegramInboxConsumer>().ProcessNextAsync(default);
+            var delivered = await scope.ServiceProvider.GetRequiredService<TelegramReplyOutboxConsumer>().ProcessNextAsync(default);
+            return processed || delivered;
         }
         public async Task SendAsync(long id, string text) { await EnqueueAsync(id, text); Assert.True(await ProcessAsync()); }
+        public async Task QueueReplyAsync(long id, string text = "Resposta fictícia.")
+        {
+            await EnqueueAsync(id, "Mensagem fictícia.");
+            await using var scope = _factory.Services.CreateAsyncScope();
+            var store = scope.ServiceProvider.GetRequiredService<IAgentTurnStore>();
+            await store.GetOrCreateAsync(id, 42, default);
+            await store.SaveResponseAsync(id, text, default);
+        }
+        public async Task<bool> DeliverAsync()
+        {
+            await using var scope = _factory.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<TelegramReplyOutboxConsumer>().ProcessNextAsync(default);
+        }
         public async Task HandleAgainAsync(long id)
         {
             await using var db = PostgresTestDatabase.CreateContext();
@@ -575,6 +592,10 @@ public sealed partial class TelegramAgentPostgresTests
         public async Task MakeRetryReadyAsync(long id)
         {
             await using var db = PostgresTestDatabase.CreateContext();
+            await db.Set<TelegramAgentTurn>().Where(t => t.UpdateId == id && t.NextSendAttemptAtUtc != null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.NextSendAttemptAtUtc, Clock.GetUtcNow()));
+            await db.Set<TelegramAgentTurn>().Where(t => t.UpdateId == id && t.SendState == "Sending")
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.SendLeaseUntilUtc, Clock.GetUtcNow().AddSeconds(-1)));
             await db.TelegramUpdatesInbox.Where(u => u.UpdateId == id && u.Estado == EstadoTelegramUpdate.FailedRetryable)
                 .ExecuteUpdateAsync(s => s.SetProperty(u => u.ProximaTentativaEmUtc, DateTimeOffset.UtcNow.AddSeconds(-1)));
         }
@@ -655,6 +676,7 @@ public sealed partial class TelegramAgentPostgresTests
     {
         public int Calls { get; set; }
         public string? Failure { get; set; }
+        public int? RetryAfter { get; set; }
         public List<string> Replies { get; } = [];
         public Func<string, Task>? BeforeReply { get; set; }
     }
@@ -666,10 +688,15 @@ public sealed partial class TelegramAgentPostgresTests
             Assert.EndsWith("/sendMessage", request.RequestUri?.AbsolutePath);
             state.Calls++;
             if (state.Failure == "uncertain") throw new HttpRequestException("PRIVATE_TRANSPORT_ERROR");
+            if (state.Failure == "timeout") throw new TaskCanceledException("PRIVATE_TIMEOUT");
             if (state.Failure == "rate") return new((HttpStatusCode)429)
-                { Content = new StringContent("""{"ok":false,"error_code":429}""", Encoding.UTF8, "application/json") };
+                { Content = new StringContent(JsonSerializer.Serialize(new { ok = false, error_code = 429,
+                    parameters = state.RetryAfter is { } seconds ? new { retry_after = seconds } : null }), Encoding.UTF8, "application/json") };
             if (state.Failure == "server") return new(HttpStatusCode.InternalServerError)
                 { Content = new StringContent("""{"ok":false,"error_code":500}""", Encoding.UTF8, "application/json") };
+            if (state.Failure == "invalid") return new(HttpStatusCode.OK) { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+            if (state.Failure == "reject") return new(HttpStatusCode.BadRequest)
+                { Content = new StringContent("""{"ok":false,"error_code":400}""", Encoding.UTF8, "application/json") };
             Assert.NotNull(request.Content);
             using var body = JsonDocument.Parse(await request.Content.ReadAsStringAsync(cancellationToken));
             Assert.Equal(42, body.RootElement.GetProperty("chat_id").GetInt64());
@@ -690,6 +717,9 @@ public sealed partial class TelegramAgentPostgresTests
         public bool FailEdit { get; set; }
         public bool FailClose { get; set; }
         public bool FailAfterBeginSend { get; set; }
+        public bool FailSendFinish { get; set; }
+        public ITelegramTextSender? Sender { get; set; }
+        public long AdministratorUserId { get; set; } = 42;
     }
     private sealed class FaultingTurns(IAgentTurnStore inner, Faults faults) : IAgentTurnStore
     {
@@ -710,17 +740,24 @@ public sealed partial class TelegramAgentPostgresTests
             if (faults.FailResponse) { faults.FailResponse = false; throw new InvalidOperationException("synthetic response failure"); }
             return inner.SaveResponseAsync(updateId, response, ct);
         }
-        public async Task<bool> BeginSendAsync(long updateId, CancellationToken ct)
+    }
+    private sealed class FaultingOutbox(ITelegramReplyOutbox inner, Faults faults) : ITelegramReplyOutbox
+    {
+        public async Task<TelegramReplyClaim?> ClaimAsync(DateTimeOffset now, long? updateId, CancellationToken ct)
         {
-            var started = await inner.BeginSendAsync(updateId, ct);
-            if (started && faults.FailAfterBeginSend)
+            var claim = await inner.ClaimAsync(now, updateId, ct);
+            if (claim is not null && faults.FailAfterBeginSend)
             {
                 faults.FailAfterBeginSend = false;
                 throw new InvalidOperationException("synthetic failure after marking send");
             }
-            return started;
+            return claim;
         }
-        public Task FinishSendAsync(long updateId, string state, long? messageId, string status, CancellationToken ct) => inner.FinishSendAsync(updateId, state, messageId, status, ct);
+        public Task<bool> FinishAsync(TelegramReplyClaim claim, TelegramTextSendResult result, DateTimeOffset now, CancellationToken ct)
+        {
+            if (faults.FailSendFinish) { faults.FailSendFinish = false; throw new InvalidOperationException("synthetic result persistence failure"); }
+            return inner.FinishAsync(claim, result, now, ct);
+        }
     }
     private sealed class FaultingCreation(IanDbContext db, Faults faults) : IAgendaCriacaoStore
     {

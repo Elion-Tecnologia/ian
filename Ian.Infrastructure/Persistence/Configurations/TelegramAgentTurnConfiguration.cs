@@ -15,6 +15,9 @@ internal sealed class TelegramAgentTurnConfiguration : IEntityTypeConfiguration<
         });
         builder.HasKey(turn => turn.UpdateId);
         builder.Property(turn => turn.UpdateId).ValueGeneratedNever();
+        builder.Property(turn => turn.LogicalReplyKey).HasMaxLength(100).IsRequired();
+        builder.HasIndex(turn => turn.LogicalReplyKey).IsUnique();
+        builder.HasIndex(turn => turn.NextSendAttemptAtUtc).HasFilter("\"NextSendAttemptAtUtc\" IS NOT NULL");
         builder.Property(turn => turn.CommandJson).HasColumnType("jsonb");
         builder.Property(turn => turn.ResponseText).HasMaxLength(4000);
         builder.Property(turn => turn.SendState).HasMaxLength(16);

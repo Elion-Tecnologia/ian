@@ -128,5 +128,6 @@ Cada item tem correspondente automatizado em `TelegramAgentPostgresTests`.
 
 Ao terminar, interrompa API/túnel e remova o banco com
 `docker stop ian59-postgres`. A execução local depende de máquina e túnel ativos;
-não oferece disponibilidade 24/7. Não há implantação ou retry durável completo
-de saída nesta homologação (#51 continua separado).
+não oferece disponibilidade 24/7. Não há implantação nesta homologação.
+A #51 acrescenta retentativas duráveis da saída privada; consulte os estados e
+limites em README.md. Não reenvie automaticamente resultados incertos.

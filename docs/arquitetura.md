@@ -369,8 +369,8 @@ da mensagem aceita. Aceitação pela API não comprova entrega/leitura. Logs em 
 Information incluem somente UpdateId, tentativa e status; token, URI autenticada,
 texto, destinatário, corpo da resposta e exceções do provedor não são registrados.
 O transporte é dedicado, sem handlers de logging do HttpClientFactory. O cliente
-não altera negócios nem o estado da inbox; integração textual e recuperação de
-saída persistente pertencem, respectivamente, à #44 e à #51.
+não altera negócios nem o estado da inbox. A integração #44 usa a outbox #51,
+descrita em 8.2, para persistência e recuperação do envio.
 
 ## 6. Integração com inteligência artificial
 
@@ -669,13 +669,42 @@ confirmado, sem outra interpretação pelo modelo. Criação registra também o 
 de execução na intenção pendente; um update seguinte não duplica uma criação já
 confirmada cuja finalização da intenção foi interrompida.
 
-A resposta é persistida antes de enviar. Retry de envio recusado por rate limit
-retoma somente a resposta, limitado a três tentativas externas à política já
-limitada do cliente Telegram. Aceitação é registrada com message_id; nunca prova
-leitura. Envio incerto (timeout, transporte, 5xx ou queda após Sending) não é
-reenviado automaticamente e não repete negócio. A inbox pode concluir o
-processamento com estado de envio Failed/Uncertain para inspeção controlada;
-Completed não significa entrega ao usuário.
+A resposta é persistida antes de enviar. A inbox conclui o processamento após
+enfileirar a resposta; Completed não significa entrega ao usuário. A outbox
+recupera o envio independentemente da inbox, sem reinterpretar ou repetir negócio.
+
+### 8.2 Respostas privadas persistentes (#51)
+
+PersistirRetentativasRespostas estende o diário existente com chave lógica única
+`private-reply:<update_id>:<ator>`, próximo despacho, token e lease. Não há
+deduplicação por texto: updates distintos podem receber respostas iguais.
+Salvar a resposta e agendá-la é uma atualização atômica, sem substituir texto
+já congelado. telegram_reply_attempts preserva o resultado mínimo de cada
+despacho, incluindo horários, chamadas físicas, retry_after e message_id; não
+armazena destinatário, texto ou exceção. Não reimplementa a auditoria geral #42.
+
+O mesmo BackgroundService drena inbox e outbox. Claim e finalização usam
+transações curtas sob advisory lock 510/1; HTTP ocorre fora da transação.
+Somente um envio fica em curso na agenda única. Lease de dois minutos supera
+o limite máximo de 60s do transporte. Recuperar lease vencida marca Uncertain,
+sem reenviar. Um resultado definitivo tardio só pode finalizar o mesmo token;
+finalizações duplicadas ou obsoletas não sobrescrevem o resultado.
+
+Pending → Sending → Accepted, Failed ou Uncertain. Até três despachos duráveis
+reutilizam a política #18 (até três chamadas por despacho, nove no total por
+padrão). Só 429 conhecido ou falha transitória comprovadamente sem chamada
+recebem backoff de 5s/10s; o maior retry_after prevalece, inclusive para respostas
+posteriores após esgotamento do orçamento. Failed sem próximo prazo é terminal.
+Timeout, transporte, 5xx, sucesso inválido ou interrupção ficam Uncertain e não
+são reenviados automaticamente. Accepted exige message_id válido e não comprova
+leitura. Se a gravação do resultado falhar, a recuperação mantém a incerteza.
+
+Cada despacho revalida ator, update original e mensagem textual privada da
+administradora atual, além da validação do cliente Telegram. Logs contêm somente
+update_id, etapa, tentativa, estado e resultado. A migration preserva histórico,
+reagenda somente pendentes/429 conhecidos e converte antigos Sending em Uncertain.
+Down recusa remover respostas ou tentativas. Foi validada somente em banco
+descartável; aplicação em outro ambiente exige autorização específica.
 
 ## 9. Consultas e respostas sob demanda
 
