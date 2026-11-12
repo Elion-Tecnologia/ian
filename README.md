@@ -247,17 +247,28 @@ só retoma recusas conhecidas; seu rollback recusa eliminar respostas/resultados
 Foi validada em banco descartável. Aplicá-la em qualquer banco existente exige
 autorização específica. Nenhuma chamada real ou implantação integra essa validação.
 
-### Redação natural e segura (#101)
+### Diálogo natural e recuperação de falhas (#103)
 
-O Gemini escolhe a redação final no mesmo ciclo de Tools, usando a mensagem ou
-as `redacoesPermitidas` do resultado confiável e conectivos neutros validados.
-O backend mantém integrais fatos, recusas, IDs e códigos; texto fora desse
-contrato, vazio, excessivo, malformado, erro de provedor ou timeout usa a resposta
-determinística. A validação é local e não chama o modelo novamente.
-A coleta pergunta um dado ausente por vez e preserva os demais no contexto.
-Saudações só são aceitas sem histórico. Respostas persistidas e enfileiradas
-continuam sendo reutilizadas sem nova redação ou repetição de mutations.
-Não há nova dependência, endpoint ou migration.
+Saudações e conversa cotidiana podem terminar na primeira chamada ao Gemini,
+com texto natural e sem Tools de agenda nem schema JSON obrigatório. Pedidos de
+agenda continuam interpretados e executados pelo MAF com Tools tipadas. A
+redação de coleta e esclarecimentos usa linguagem livre, com limites e validação
+do assunto solicitado; não existe comparação com uma lista de frases literais.
+Resultados de negócio, conflitos, seleção e confirmação são exibidos de forma
+determinística pelo backend, incluindo fatos, referência do agendamento e código.
+
+Falhas de provedor, resposta inválida, limite de tokens, timeout e falha de Tool
+possuem diagnóstico por update/etapa/categoria, sem conteúdo privado ou exceção
+completa. O orçamento inicial passou de 512 para 2048 tokens; no
+`gemini-3.1-flash-lite`, o SDK usa raciocínio mínimo na interpretação. Falha de
+redação não apaga resultado confirmado: o fallback usa o pedido persistido ou o
+resultado confiável, sem repetir mutations ou chamadas para updates concluídos.
+
+“Hoje” usa `America/Sao_Paulo`. “Restante do dia” preserva a data e exige
+esclarecer horário e duração, sem inferi-los dos padrões do catálogo. Não há
+migration, nova dependência, endpoint ou serviço externo. Testes usam SDK/HTTP
+simulados e PostgreSQL descartável; não consomem Gemini real nem demonstram a
+qualidade semântica do provedor em produção.
 
 ### Diálogo textual integrado (#44)
 

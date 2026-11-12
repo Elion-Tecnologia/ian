@@ -24,8 +24,8 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.Equal("Pode me passar o telefone do cliente com DDD?", f.Transport.Replies[^1]);
         Assert.Single(f.Transport.Replies[^1], c => c == '?');
         Assert.DoesNotContain("nome", f.Transport.Replies[^1]);
-        if (sdk) Assert.Contains(f.Model.Prompts, p => p.Contains("redacoesPermitidas"));
-        else Assert.Contains(f.Model.FunctionResults, r => r.ToString().Contains("redacoesPermitidas"));
+        if (sdk) Assert.Contains(f.Model.Prompts, p => p.Contains("questionTopic"));
+        else Assert.Contains(f.Model.FunctionResults, r => r.ToString().Contains("questionTopic"));
         Assert.Equal(6, f.Model.Calls); // No separate rewrite call.
 
         f.Restart();
@@ -63,21 +63,21 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("verificar_disponibilidade", new { data = "2030-01-07", duracao = 1, unidadeDuracao = "DiasCorridos" },
             texto: "Veja os detalhes:\nDisponível: 07/01/2030 08:00–18:00");
         await f.SendAsync(3, "Um dia corrido.");
-        Assert.StartsWith("Veja os detalhes:", f.Transport.Replies[^1]);
+        Assert.Contains("07/01/2030", f.Transport.Replies[^1]);
         Assert.Contains("Disponível", f.Transport.Replies[^1]);
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Empty(await db.TelegramBusinessOperations.ToListAsync());
     }
 
     [PostgresFact]
-    public async Task ModeloPodeEscolherResumoNaturalSomenteComFatosPersistidos()
+    public async Task ResumoDeEscritaUsaSomenteFatosPersistidos()
     {
         await using var f = await Fixture.CreateAsync();
         f.Model.Tool("criar_agendamento", Criar(), texto:
             "Pronto, ficou agendado: Montagem para Ana, 07/01/2030 a 13/01/2030.\n7 dias corridos – 08h–18h em cada dia.\nEndereço: Rua A.");
         await f.SendAsync(1, "Marque montagem por sete dias para Ana.");
         var response = Assert.Single(f.Transport.Replies);
-        Assert.StartsWith("Pronto, ficou agendado:", response);
+        Assert.Contains("Agendamento criado", response);
         Assert.Contains("Ana", response);
         Assert.Contains("07/01/2030 a 13/01/2030", response);
         Assert.Equal(3, f.Model.Calls);

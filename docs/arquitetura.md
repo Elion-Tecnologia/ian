@@ -436,21 +436,35 @@ formatação #32. As unidades são Minutos/DiasCorridos e modalidades
 Interno/Externo/Remoto, alinhadas ao Domain. Os contratos anteriores Horas/NaLoja
 não correspondiam ao modelo implementado e foram substituídos.
 
-A regressão #96 acrescentou esclarecer_pedido, sem escrita. A #98 substitui
-RequireAny por interpretação estruturada antes das Tools, sem funções disponíveis
-nessa primeira chamada. Objetivo CriarAgendamento registra a intenção incompleta
-antes de consultar o catálogo; a primeira Tool escolhida não define o objetivo.
-Na execução MAF, Tools usam Auto e retornam resultados ao agente em sequência.
-O modelo escolhe o ato de diálogo final (coletar, explicar catálogo/pedido,
-resultado ou esclarecer), que o backend compõe com fatos verificados. A #101
-acrescenta redação no mesmo retorno final: o Gemini escolhe frases de coleta e
-resumos naturais oferecidos pelo backend, podendo usar conectivos neutros.
-AgentResponseComposer aceita somente a mensagem integral ou uma alternativa
-confiável integral; status, datas, IDs, recusas e códigos não são reescritos.
-Redação vazia, inválida, excessiva ou falha do modelo usa fallback determinístico,
-sem chamada extra, repetição de escrita ou nova redação de resposta persistida.
-A coleta pede um dado ausente por vez sem apagar os demais campos pendentes.
-Prosa livre ou plano inválido não atestam escrita. Não há classificador por palavras exatas.
+A regressão #96 acrescentou esclarecer_pedido, sem escrita. A #98 introduziu
+interpretação antes das Tools, sem funções disponíveis nessa primeira chamada.
+A #103 permite texto social direto nessa etapa, sem schema obrigatório, e
+encerra saudações sem executar Tools ou fazer outra chamada. Para agenda, o
+plano JSON identifica o objetivo antes das Tools: CriarAgendamento registra a
+intenção incompleta e a primeira Tool não define o objetivo. Na execução MAF,
+Tools usam Auto e retornam resultados em sequência; a resposta final pode ser
+texto natural de coleta/esclarecimento ou um ato de diálogo JSON.
+
+AgentResponseComposer separa conversa, coleta, explicação e resultado protegido.
+Conversa aceita prosa sem igualdade literal; coleta valida o assunto da pergunta
+e mantém instruções obrigatórias do backend. Explicações preservam o bloco de
+fatos. Resultados de escrita, disponibilidade, conflitos, candidatos e códigos
+são sempre renderizados pelo backend, independentemente do texto do modelo.
+Texto excessivo, inválido ou com alegações de negócio não comprovadas usa fallback.
+O fallback recupera a próxima pergunta do pedido persistido ou o resultado da
+Tool/commit. Apenas um pedido afirmativo explícito de agendar, sem outro objetivo
+pendente, diante de falha de interpretação ou pergunta em prosa sem plano,
+pode iniciar coleta de recuperação;
+esse caminho nunca grava agendamento nem substitui uma intenção existente.
+
+O diagnóstico registra update, fase, categoria, status HTTP do provedor, tipo de
+exceção e término normal/limite de tokens, sem mensagem de exceção, prompt ou
+conteúdo privado. O orçamento inicial é de 2048 tokens e o modelo
+`gemini-3.1-flash-lite` usa ThinkingLevel.Minimal nessa etapa. O contrato SDK é
+verificado com HTTP simulado; não se presume uma rejeição real de schema sem
+telemetria do provedor. “Hoje” é resolvido pelo relógio do backend no fuso de
+São Paulo; o marcador persistido de restante do dia exige horário e duração
+explícitos, preservando regras e padrões dos demais pedidos.
 
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
