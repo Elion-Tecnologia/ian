@@ -11,9 +11,12 @@ public enum DialogueReply { Coletar, ExplicarCatalogo, ExplicarPedido, Resultado
 // The model chooses meaning and the reply act, never facts or an assertion of persistence.
 public sealed record AgentDialoguePlan(DialogueGoal Objetivo, DialogueReply Resposta)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Texto { get; init; }
+
     public static AgentDialoguePlan? Parse(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text) || text.Length > 2000) return null;
+        if (string.IsNullOrWhiteSpace(text) || text.Length > AgentExecutionLimits.MaxToolResultCharacters + 2000) return null;
         try
         {
             using var json = JsonDocument.Parse(text);

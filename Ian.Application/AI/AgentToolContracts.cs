@@ -27,6 +27,10 @@ public sealed record AgentToolResult
     public string Message { get; init; }
     public object? Data { get; init; }
 
+    // Only backend-authored alternatives may replace the factual message.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? RedacoesPermitidas { get; init; }
+
     public static AgentToolResult Succeeded(string message, object? data = null) =>
         new(AgentToolOutcome.Success, message, data);
 

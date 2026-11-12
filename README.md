@@ -247,6 +247,18 @@ só retoma recusas conhecidas; seu rollback recusa eliminar respostas/resultados
 Foi validada em banco descartável. Aplicá-la em qualquer banco existente exige
 autorização específica. Nenhuma chamada real ou implantação integra essa validação.
 
+### Redação natural e segura (#101)
+
+O Gemini escolhe a redação final no mesmo ciclo de Tools, usando a mensagem ou
+as `redacoesPermitidas` do resultado confiável e conectivos neutros validados.
+O backend mantém integrais fatos, recusas, IDs e códigos; texto fora desse
+contrato, vazio, excessivo, malformado, erro de provedor ou timeout usa a resposta
+determinística. A validação é local e não chama o modelo novamente.
+A coleta pergunta um dado ausente por vez e preserva os demais no contexto.
+Saudações só são aceitas sem histórico. Respostas persistidas e enfileiradas
+continuam sendo reutilizadas sem nova redação ou repetição de mutations.
+Não há nova dependência, endpoint ou migration.
+
 ### Diálogo textual integrado (#44)
 
 O handler ativo conecta Telegram autorizado → MAF/Gemini → sete Tools tipadas →

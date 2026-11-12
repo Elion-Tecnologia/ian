@@ -14,7 +14,6 @@ public sealed partial class TelegramAgentPostgresTests
         f.Faults.UseSdk = sdk;
         f.Model.Tool("criar_agendamento", new { });
         await f.SendAsync(1, "Quero agendar um serviço.");
-        Assert.Contains("serviço desejado", f.Transport.Replies[^1]);
         Assert.Contains("nome do cliente", f.Transport.Replies[^1]);
         Assert.DoesNotContain("operações", f.Transport.Replies[^1]);
         Assert.Equal("NONE", f.Model.ToolModes[0]);

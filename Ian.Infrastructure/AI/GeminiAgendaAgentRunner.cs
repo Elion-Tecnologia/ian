@@ -43,6 +43,7 @@ public sealed class GeminiAgendaAgentRunner(
                 logger?.LogWarning("Update {UpdateId} stage=model_interpret_invalid.", context?.UpdateId);
                 return Fail(AiModelFailure.InvalidResponse);
             }
+            plan = plan with { Texto = null }; // Interpretation never supplies the final wording.
             logger?.LogInformation("Update {UpdateId} stage=model_interpreted goal={Goal} reply={Reply}.", context?.UpdateId, plan.Objetivo, plan.Resposta);
             await registry.BeginTurnAsync(plan, caller, timeout.Token);
             var client = new FunctionInvokingChatClient(transport)
@@ -58,7 +59,7 @@ public sealed class GeminiAgendaAgentRunner(
                 ChatOptions = new ChatOptions
                 {
                     ModelId = options.Value.Model,
-                    Instructions = AgentToolPolicy.SystemInstructions + " Use as Tools mesmo com argumentos parciais. O objetivo foi identificado antes das Tools e deve ser preservado. Consulte o catálogo quando necessário e continue a operação, lendo os resultados das funções. Nunca escolha candidatos, aceite confirmação ou substitua intenção pendente por conta própria. Datas relativas usam o dia/fuso do host. Não invente telefone, endereço, data ou horário. No máximo uma escrita por update. Ao terminar, gere SOMENTE o JSON do ato de diálogo: " + AgentDialoguePlan.Instructions,
+                    Instructions = AgentToolPolicy.SystemInstructions + " Use as Tools mesmo com argumentos parciais. O objetivo foi identificado antes das Tools e deve ser preservado. Consulte o catálogo quando necessário e continue a operação, lendo os resultados das funções. Nunca escolha candidatos, aceite confirmação ou substitua intenção pendente por conta própria. Datas relativas usam o dia/fuso do host. Não invente telefone, endereço, data ou horário. No máximo uma escrita por update. Ao terminar, gere SOMENTE JSON: " + AgentDialoguePlan.Instructions + " " + AgentResponseComposer.Instructions,
                     Tools = registry.CreateTools(caller).Cast<AITool>().ToList(),
                     ToolMode = ChatToolMode.Auto,
                     MaxOutputTokens = 2048,

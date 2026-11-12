@@ -20,7 +20,6 @@ public sealed partial class TelegramAgentPostgresTests
         await f.SendAsync(1, pedido);
         var first = f.Transport.Replies[^1];
         Assert.Contains("nome do cliente", first);
-        Assert.Contains("serviço desejado", first);
         Assert.Contains("Serviços:", first);
         Assert.Equal(new[] { "listar_servicos" }, model.ExecutedTools); // Intentionally the same intermediate choice that escaped #96.
         await using (var db = PostgresTestDatabase.CreateContext())

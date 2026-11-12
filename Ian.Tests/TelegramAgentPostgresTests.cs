@@ -70,12 +70,14 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("criar_agendamento", new { nomeCliente = "Ana", tipoServicoId = 2L, data = "2030-01-07" });
         await f.SendAsync(1, "Marque montagem para Ana em 07/01/2030.");
         Assert.Contains("telefone", f.Transport.Replies[^1]);
-        Assert.Contains("endereço", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("endereço", f.Transport.Replies[^1]); // Ask one missing field at a time.
         await using (var check = PostgresTestDatabase.CreateContext())
         {
             Assert.Empty(await check.Agendamentos.ToListAsync());
             Assert.Empty(await check.Clientes.ToListAsync());
-            Assert.Contains("Ana", (await check.SolicitacoesPendentes.SingleAsync()).DadosColetadosJson);
+            var pending = await check.SolicitacoesPendentes.SingleAsync();
+            Assert.Contains("Ana", pending.DadosColetadosJson);
+            Assert.Contains("endere", pending.CamposFaltantesJson); // All missing fields remain persisted.
         }
         f.Restart();
         f.Model.Tool("criar_agendamento", new { telefoneCliente = "11999999999", enderecoServico = "Rua A" });
@@ -607,6 +609,7 @@ public sealed partial class TelegramAgentPostgresTests
         private readonly Queue<ChatResponse> _responses = new();
         public int Calls { get; private set; }
         public Exception? Failure { get; set; }
+        public Exception? FinalFailure { get; set; }
         public List<string> Prompts { get; } = [];
         public List<string[]> ToolNames { get; } = [];
         public List<string> ToolModes { get; } = [];
@@ -617,18 +620,24 @@ public sealed partial class TelegramAgentPostgresTests
             var goal = name == "criar_agendamento" ? DialogueGoal.CriarAgendamento : DialogueGoal.Consulta;
             return new(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(new AgentDialoguePlan(goal, DialogueReply.Resultado), AgentRequestJson.Options)));
         }
-        public void Tool(string name, object arguments, bool final = true)
+        public void Tool(string name, object arguments, bool final = true, string? texto = null)
         {
             var element = JsonSerializer.SerializeToElement(arguments);
             var args = element.EnumerateObject().Where(p => p.Value.ValueKind != JsonValueKind.Null)
                 .ToDictionary(p => p.Name, p => (object?)p.Value.Clone());
             _responses.Enqueue(new(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(Guid.NewGuid().ToString(), name, args)]))
                 { FinishReason = ChatFinishReason.ToolCalls });
-            if (final) _responses.Enqueue(new(new ChatMessage(ChatRole.Assistant, "PRIVATE_MODEL_CLAIM: agendamento criado com sucesso."))
+            if (final) _responses.Enqueue(new(new ChatMessage(ChatRole.Assistant, texto is null ? "PRIVATE_MODEL_CLAIM: agendamento criado com sucesso." : JsonSerializer.Serialize(new AgentDialoguePlan(DialogueGoal.Continuar, DialogueReply.Coletar) { Texto = texto }, AgentRequestJson.Options)))
                 { FinishReason = ChatFinishReason.Stop });
         }
-        public ChatResponse Next() => _responses.Count > 0 ? _responses.Dequeue()
-            : new ChatResponse(new ChatMessage(ChatRole.Assistant, "PRIVATE_MODEL_CLAIM"));
+        public ChatResponse Next()
+        {
+            var response = _responses.Count > 0 ? _responses.Dequeue()
+                : new ChatResponse(new ChatMessage(ChatRole.Assistant, "PRIVATE_MODEL_CLAIM"));
+            if (FinalFailure is not null && !response.Messages.SelectMany(m => m.Contents).Any(c => c is FunctionCallContent))
+                throw FinalFailure;
+            return response;
+        }
         public async Task<HttpResponseMessage> GoogleResponseAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Assert.Equal("synthetic-key", request.Headers.GetValues("x-goog-api-key").Single());

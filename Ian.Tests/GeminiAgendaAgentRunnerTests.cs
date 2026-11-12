@@ -47,6 +47,33 @@ public sealed class GeminiAgendaAgentRunnerTests
         Assert.Equal(0, client.Calls);
     }
 
+    [Fact]
+    public async Task PrazoDoProvedorUsaFallbackSemInvocarTools()
+    {
+        var backend = new Backend();
+        var runner = new GeminiAgendaAgentRunner(
+            Options.Create(new GeminiOptions { ApiKey = "synthetic-key", Model = "gemini-3.1-flash-lite", TimeoutSeconds = 1 }),
+            () => new SlowClient(),
+            new AgentToolRegistry(backend, Options.Create(new TelegramOptions { AdministratorUserId = 42 }), new AgentExecutionBudget()));
+        var result = await runner.RunAsync("Consulta sintética.", Caller());
+        Assert.Equal(AiModelFailure.Timeout, result.Failure);
+        Assert.Equal(0, backend.Calls);
+    }
+
+    private sealed class SlowClient : IChatClient
+    {
+        public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("Deadline was not enforced.");
+        }
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public void Dispose() { }
+    }
+
     private static AgentToolCaller Caller() => new(42, 42, true, true, true);
     private static GeminiAgendaAgentRunner Runner(IChatClient client, Backend backend) => new(
         Options.Create(new GeminiOptions { ApiKey = "synthetic-key", Model = "gemini-3.1-flash-lite" }), () => client,
