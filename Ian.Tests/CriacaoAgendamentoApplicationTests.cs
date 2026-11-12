@@ -162,6 +162,7 @@ public sealed class CriacaoAgendamentoApplicationTests
 
     private sealed class ClientesFake(Cliente cliente) : IClientes
     {
+        public Task<ResultadoLocalizacaoCliente> LocalizarPorIdAsync(long id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<PreparacaoCadastroCliente> PrepararCadastroAsync(
             CadastrarClienteSolicitacao solicitacao,
             CancellationToken cancellationToken = default) =>
@@ -185,6 +186,7 @@ public sealed class CriacaoAgendamentoApplicationTests
 
     private sealed class ClienteStoreFake : IClienteStore
     {
+        public Task<Cliente?> LocalizarPorIdAsync(long id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Cliente?> LocalizarParaCadastroAsync(
             string telefoneNormalizado,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();

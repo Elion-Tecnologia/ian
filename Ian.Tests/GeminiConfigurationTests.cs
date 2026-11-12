@@ -12,13 +12,13 @@ namespace Ian.Tests;
 public sealed class GeminiConfigurationTests
 {
     [Fact]
-    public async Task MissingAiConfigurationDoesNotBreakDiOrActivateTelegramHandlers()
+    public async Task MissingAiConfigurationDoesNotBreakDiAndAgendaHandlerIsRegistered()
     {
         using var services = Provider();
         var model = services.GetRequiredService<IAiModel>();
         Assert.Same(model, services.GetRequiredService<IAiModel>());
         Assert.IsType<GeminiAiModel>(model);
-        Assert.IsType<DeferredTelegramHandlers>(services.GetRequiredService<ITelegramAuthorizedUpdateHandler>());
+        Assert.IsType<AgendaTelegramHandler>(services.GetRequiredService<ITelegramAuthorizedUpdateHandler>());
 
         var result = await model.InvokeAsync("synthetic prompt");
         Assert.Equal(AiModelFailure.InvalidConfiguration, result.Failure);
@@ -62,7 +62,8 @@ public sealed class GeminiConfigurationTests
         {
             ["Telegram:BotToken"] = "synthetic-token",
             ["Telegram:AdministratorUserId"] = "42",
-            ["Telegram:WebhookSecret"] = "SYNTHETIC_SECRET"
+            ["Telegram:WebhookSecret"] = "SYNTHETIC_SECRET",
+            ["ConnectionStrings:Default"] = "Host=127.0.0.1;Database=ian_t44_tests"
         };
         if (validDefaults)
         {

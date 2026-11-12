@@ -60,6 +60,7 @@ public sealed record ResultadoLocalizacaoCliente(
 
 public interface IClientes
 {
+    Task<ResultadoLocalizacaoCliente> LocalizarPorIdAsync(long id, CancellationToken cancellationToken = default);
     Task<PreparacaoCadastroCliente> PrepararCadastroAsync(
         CadastrarClienteSolicitacao solicitacao,
         CancellationToken cancellationToken = default);
@@ -79,6 +80,7 @@ public interface IClientes
 
 public interface IClienteStore
 {
+    Task<Cliente?> LocalizarPorIdAsync(long id, CancellationToken cancellationToken = default);
     Task<Cliente?> LocalizarParaCadastroAsync(
         string telefoneNormalizado,
         CancellationToken cancellationToken = default);

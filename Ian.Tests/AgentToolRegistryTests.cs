@@ -27,26 +27,27 @@ public sealed class AgentToolRegistryTests
         var registry = scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>();
         var tools = registry.CreateTools(new AgentToolCaller(42, 42, true, true, true));
 
-        Assert.Equal(5, tools.Count);
-        Assert.Equal(new[] { "cadastrar_cliente", "consultar_agenda", "verificar_disponibilidade", "criar_agendamento", "alterar_agendamento" },
+        Assert.Equal(7, tools.Count);
+        Assert.Equal(new[] { "cadastrar_cliente", "localizar_cliente", "listar_servicos", "consultar_agenda", "verificar_disponibilidade", "criar_agendamento", "alterar_agendamento" },
             tools.Select(tool => tool.Name));
         Assert.IsType<GeminiAiModel>(provider.GetRequiredService<IAiModel>());
     }
 
     [Fact]
-    public async Task MissingArgumentsAndUnauthorizedCallerNeverReachBackend()
+    public async Task PartialArgumentsReachCollectionBackendAndUnauthorizedCallerIsDenied()
     {
         var backend = new RecordingBackend();
         var registry = new AgentToolRegistry(backend, Options.Create(new TelegramOptions { AdministratorUserId = 42 }), new AgentExecutionBudget());
         var tool = registry.CreateTools(new AgentToolCaller(42, 42, true, true, true)).Single(x => x.Name == "cadastrar_cliente");
+        backend.Result = AgentToolResult.Missing("Informe telefone.");
         var missing = await tool.InvokeAsync(new AIFunctionArguments { ["nome"] = "Ana" });
         Assert.Equal(AgentToolOutcome.MissingData, ReadResult(missing).Outcome);
-        Assert.Equal(0, backend.Calls);
+        Assert.Equal(1, backend.Calls);
 
         var unauthorizedTool = registry.CreateTools(new AgentToolCaller(43, 43, true, true, true)).Single(x => x.Name == "cadastrar_cliente");
         var denied = await unauthorizedTool.InvokeAsync(new AIFunctionArguments { ["nome"] = "Ana", ["telefone"] = "11999999999" });
         Assert.Equal(AgentToolOutcome.Error, ReadResult(denied).Outcome);
-        Assert.Equal(0, backend.Calls);
+        Assert.Equal(1, backend.Calls);
     }
 
     [Fact]
@@ -59,7 +60,7 @@ public sealed class AgentToolRegistryTests
         var invalid = await tool.InvokeAsync(new AIFunctionArguments
         {
             ["nomeCliente"] = "Ana", ["telefoneCliente"] = "11999999999", ["tipoServicoId"] = 0L,
-            ["data"] = new DateOnly(2026, 11, 12), ["modalidade"] = "NaLoja", ["duracao"] = 2,
+            ["data"] = new DateOnly(2026, 11, 12), ["modalidade"] = "Interno", ["duracao"] = 2,
             ["unidadeDuracao"] = "DiasCorridos"
         });
         Assert.Equal(AgentToolOutcome.Error, ReadResult(invalid).Outcome);
@@ -69,7 +70,7 @@ public sealed class AgentToolRegistryTests
         var valid = await tool.InvokeAsync(new AIFunctionArguments
         {
             ["nomeCliente"] = "Ana", ["telefoneCliente"] = "11999999999", ["tipoServicoId"] = 1L,
-            ["data"] = new DateOnly(2026, 11, 12), ["modalidade"] = "NaLoja", ["duracao"] = 2,
+            ["data"] = new DateOnly(2026, 11, 12), ["modalidade"] = "Interno", ["duracao"] = 2,
             ["unidadeDuracao"] = "DiasCorridos"
         });
         Assert.Equal(AgentToolOutcome.ConfirmationRequired, ReadResult(valid).Outcome);
@@ -108,7 +109,15 @@ public sealed class AgentToolRegistryTests
     [Fact]
     public async Task DefaultBackendNeverClaimsBusinessOperationSucceeded()
     {
-        var result = await new AgentToolBackend().ExecuteAsync(new CadastrarClienteToolRequest("Ana", "11999999999", null));
+        var config = new ConfigurationManager
+        {
+            ["Telegram:BotToken"] = "synthetic-token", ["Telegram:AdministratorUserId"] = "42",
+            ["Telegram:WebhookSecret"] = "synthetic", ["ConnectionStrings:Default"] = "Host=127.0.0.1;Database=ian_t44_tests"
+        };
+        using var provider = new ServiceCollection().AddInfrastructure(config).BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var result = await scope.ServiceProvider.GetRequiredService<IAgentToolBackend>()
+            .ExecuteAsync(new CadastrarClienteToolRequest("Ana", "11999999999", null));
         Assert.Equal(AgentToolOutcome.Error, result.Outcome);
     }
 

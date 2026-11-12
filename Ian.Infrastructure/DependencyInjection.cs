@@ -43,7 +43,14 @@ public static class DependencyInjection
         services.AddSingleton<IAiModel>(provider => new GeminiAiModel(
             provider.GetRequiredService<IOptions<GeminiOptions>>(),
             provider.GetRequiredService<GeminiChatClientFactory>().GetClient));
-        services.AddScoped<IAgentToolBackend, AgentToolBackend>();
+        services.AddScoped<AgentTurnContext>();
+        services.AddScoped<AgendaAgentApplication>();
+        services.AddScoped<IAgentToolBackend>(provider => provider.GetRequiredService<AgendaAgentApplication>());
+        services.AddScoped<IAgentTurnStore, PostgresAgentTurnStore>();
+        services.AddScoped<IAgendaAgentRunner>(provider => new GeminiAgendaAgentRunner(
+            provider.GetRequiredService<IOptions<GeminiOptions>>(),
+            provider.GetRequiredService<GeminiChatClientFactory>().GetClient,
+            provider.GetRequiredService<IAgentToolRegistry>()));
         services.AddScoped<AgentExecutionBudget>();
         services.AddScoped<IAgentToolRegistry, AgentToolRegistry>();
 
@@ -124,11 +131,7 @@ public static class DependencyInjection
         services.AddScoped<IClienteStore, PostgresClienteStore>();
         services.AddScoped<IClientes, ClientesApplication>();
 
-        services.AddScoped<DeferredTelegramHandlers>();
-
-        services.AddScoped<ITelegramAuthorizedUpdateHandler>(
-            provider =>
-                provider.GetRequiredService<DeferredTelegramHandlers>());
+        services.AddScoped<ITelegramAuthorizedUpdateHandler, AgendaTelegramHandler>();
 
         services.AddScoped<TelegramUpdateDispatcher>();
         services.AddScoped<TelegramInboxConsumer>();

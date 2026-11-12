@@ -339,15 +339,12 @@ interrupções e limitar novas tentativas.
 
 ### 5.4 Limitações atuais
 
-Os handlers administrativos definitivos ainda
-não estão implementados na versão consultada.
-
-`DeferredTelegramHandlers` sinaliza que esses
-handlers estão indisponíveis.
-
-Portanto, a infraestrutura de recebimento e
-processamento existe, mas o fluxo funcional completo
-do agente ainda não está concluído.
+A #44 registra `AgendaTelegramHandler` no dispatcher autorizado. O fluxo real é
+webhook/inbox → handler → MAF/Gemini → Tools → Application → PostgreSQL →
+resposta privada. `DeferredTelegramHandlers` não é mais o handler registrado.
+Registros antigos pausados com HandlerUnavailable continuam preservados e
+exigem reativação controlada; a #44 não os reativa automaticamente.
+A homologação com serviços reais continua na #59.
 
 ### 5.5 Respostas textuais privadas
 
@@ -388,14 +385,15 @@ Google.GenAI 2.0.0, com Microsoft.Extensions.AI 10.11.0 transitivo.
 O modelo escolhido pelo usuário é `gemini-3.1-flash-lite`. O acesso e o
 Function Calling básico na conta foram validados nos dois smokes reais
 autorizados de 10/11/2026, usando somente conteúdo sintético.
-A integração é textual e ainda não substitui os handlers Telegram provisórios.
+A #44 usa o mesmo transporte na orquestração textual com Tools e substitui o
+handler provisório pelo AgendaTelegramHandler.
 
 O contrato retorna texto/uso ou falha tipada, sem tipos dos SDKs.
 O chamador deve validar autorização antes de invocá-lo. Cada chamada
-usa um agente/sessão novo; não há persistência de conversas nesta etapa.
-Não existem ferramentas registradas em produção, e chamadas de função
-inesperadas são rejeitadas como resposta inválida. A demonstração sem
-efeitos colaterais vive somente em Ian.Tests.
+usa um agente/sessão novo. Esse adaptador textual permanece sem Tools e rejeita
+chamadas de função inesperadas. A orquestração com Tools e contexto mínimo
+persistido é responsabilidade de GeminiAgendaAgentRunner/AgendaAgentApplication
+na #44; a demonstração isolada da #19 continua somente em Ian.Tests.
 
 `GeminiChatClientFactory` gerencia o transporte e o cliente compartilhado
 sem histórico, e os descarta com o contêiner DI. Retries do SDK estão
@@ -426,26 +424,51 @@ O agente não deve:
 
 ### 6.3 Ferramentas do agente
 
-`IAgentToolRegistry` em Infrastructure publica cinco funções MAF com argumentos
-tipados para cadastro de cliente, consulta de agenda, disponibilidade, criação e
-alteração de agendamento. Os resultados usam os estados `Success`, `MissingData`,
-`Ambiguous`, `Conflict`, `ConfirmationRequired` e `Error`. Argumentos incompletos
-ou inválidos e chamadas fora do chat privado da administradora falham antes do
-backend. Cada execução limita chamadas de Tools a 8, cada chamada a 15 segundos,
-resultados a 8.000 caracteres; a política do agente limita turnos a 6 e prompts
-a 16.000 caracteres.
+`IAgentToolRegistry` publica sete funções tipadas: cadastrar_cliente,
+localizar_cliente, listar_servicos, consultar_agenda, verificar_disponibilidade,
+criar_agendamento e alterar_agendamento. Esta última conecta editar, reagendar,
+concluir e preparar cancelamento às operações #33/#35. Cadastro/localização
+reutiliza #25; catálogo #24; cálculo #30; criação transacional #31; consultas e
+formatação #32. As unidades são Minutos/DiasCorridos e modalidades
+Interno/Externo/Remoto, alinhadas ao Domain. Os contratos anteriores Horas/NaLoja
+não correspondiam ao modelo implementado e foram substituídos.
 
-O registro não habilita por si só Function Calling no fluxo de conversa. A
-integração efetiva das Tools com os casos de uso autorizados pertence à #44;
-até lá, o backend padrão retorna `Error` sem executar negócio, persistência ou
-chamada Gemini. `IAiModel` e `GeminiAiModel` continuam sem ferramentas registradas.
+`GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
+FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
+8 chamadas de Tools, 15 segundos por Tool e 60 segundos por execução. Prompts
+limitam-se a 16.000 caracteres e resultados a 8.000; respostas Telegram têm até
+4.000. O IAiModel/GeminiAiModel textual da #19 continua disponível sem Tools para
+seus consumidores existentes; a orquestração usa IAgendaAgentRunner.
 
-A instrução do agente limita o modelo às capacidades publicadas e proíbe
-declarar sucesso sem um resultado `Success`.
+`AgendaAgentApplication` recebe somente contexto confiável do host. O handler e
+o registro revalidam administradora, identidade do privado, mensagem textual e
+origem humana. O modelo fornece argumentos de funções, nunca SQL, DbContext,
+update_id, ator ou aceite de confirmação. Tools invocam casos de uso existentes;
+padrões vêm do catálogo real. Consultas incluem IDs/versões para revalidação.
 
-A autorização, a consistência dos dados,
-as transações e as regras de disponibilidade
-continuam sendo responsabilidades do backend.
+Pedidos incompletos usam IPendingConversation (#21), persistindo o request
+normalizado, campos faltantes e candidatos. O campo interno request admite até
+8.000 caracteres; o limite total do contexto permanece 12.000. Uma consulta não
+descarta a pendência. Outro tipo de pedido é recusado até /descartar explícito.
+Localização ambígua pode manter a intenção LocalizarCliente, que apenas resolve
+identidade e não cadastra ou agenda. Candidatos de cliente/agendamento exigem
+texto cliente <ID> ou agendamento <ID> (ou ID isolado se houver um único conjunto).
+O modelo não escolhe candidatos. O contexto é retomado após reinício e a última
+resposta persistida do backend pode acompanhar o prompt como dado.
+
+Cancelamento apenas prepara um desafio da #22. O handler reconhece o texto
+exato confirmar <código do desafio>, relê a confirmação persistida e constrói
+ConfirmationAcceptance fora do modelo. Um sim isolado e código antigo não
+aceitam uma nova confirmação. A #22 revalida ator, alvo, argumentos, versão,
+expiração e consumo dentro da transação da mutação. /descartar abandona somente
+a intenção, sem cancelar um agendamento.
+
+O texto final do modelo não comprova escrita. A resposta é produzida a partir
+dos resultados do backend: mutação confirmada tem prioridade, assim como
+perguntas, ambiguidades e recusas de negócio sobre consultas intercaladas.
+Erros sanitizados não viram sucesso. No máximo uma tentativa de escrita é
+executada por update; chamadas subsequentes não podem executar outra mutação.
+Todos os dados de agendamento continuam sujeitos aos casos de uso e lock da #79.
 
 ## 7. Persistência
 
@@ -538,8 +561,7 @@ Use `IPendingConversation.SelectCandidateAsync` com campo `Agendamento` para a
 escolha explícita (a #21 persiste `AgendamentoId` nos campos coletados); releia
 o alvo selecionado para obter a versão antes de editar.
 Uma intenção já pendente não é substituída. A seleção e a edição são casos de uso
-internos: autorização de comandos privados e integração das Tools continuam na
-#44.
+internos, integrados ao handler autorizado e às Tools na #44.
 
 A #35 disponibiliza `IEncerramentoAgendamento`. `ConcluirAsync` exige update, ID e
 versão esperada; `PrepararCancelamentoAsync` delega o desafio à #22 e
@@ -548,7 +570,7 @@ versão e validade. A intenção pendente inequívoca já deve estar persistida 
 #22 (campos `agendamentoId` e `operacao=cancelar`, sem faltantes/candidatos). O aceite
 é produzido pela orquestração textual confiável, nunca pelo modelo. Conclusão é
 operação comum sem confirmação extra; sua autorização de comando privado, como
-na criação/edição, será feita na integração da #44.
+na criação/edição, é feita pelo handler e pelo registro na #44.
 
 Somente Agendado transita para Concluido ou Cancelado. Ambas as operações releem
 sob lock global, incrementam Versao, vinculam a operação técnica ao agendamento e
@@ -599,6 +621,31 @@ devidamente justificada.
 
 Integrações externas não devem presumir
 garantia absoluta de execução exatamente uma vez.
+
+### 8.1 Diário de recuperação do agente (#44)
+
+PersistirTurnosAgente cria somente telegram_agent_turns, com PK/FK restritiva
+UpdateId → inbox, ator, comando congelado em jsonb, resposta textual e estado de
+envio (Pending, Sending, Accepted, Failed, Uncertain). Não armazena raciocínio ou
+transcrição completa do modelo. A migration foi exercitada apenas em base local
+descartável; aplicação a outro ambiente exige autorização específica. Down recusa
+remoção se houver turnos, preservando dados de recuperação.
+
+Um advisory lock de sessão por administradora serializa a orquestração sem manter
+transação aberta durante Gemini/Telegram. Antes de uma escrita, o comando é
+persistido e congelado por update. Após queda antes da resposta, o handler
+reexecuta esse comando sob a idempotência existente ou reconhece o vínculo já
+confirmado, sem outra interpretação pelo modelo. Criação registra também o update
+de execução na intenção pendente; um update seguinte não duplica uma criação já
+confirmada cuja finalização da intenção foi interrompida.
+
+A resposta é persistida antes de enviar. Retry de envio recusado por rate limit
+retoma somente a resposta, limitado a três tentativas externas à política já
+limitada do cliente Telegram. Aceitação é registrada com message_id; nunca prova
+leitura. Envio incerto (timeout, transporte, 5xx ou queda após Sending) não é
+reenviado automaticamente e não repete negócio. A inbox pode concluir o
+processamento com estado de envio Failed/Uncertain para inspeção controlada;
+Completed não significa entrega ao usuário.
 
 ## 9. Consultas e respostas sob demanda
 

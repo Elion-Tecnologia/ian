@@ -84,7 +84,7 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_agendamentos_duracao", " \"Duracao\" > 0 ");
 
-                            t.HasCheckConstraint("ck_agendamentos_endereco_externo", "\"Modalidade\" <> 'Externo'\r\nOR (\"EnderecoSnapshot\" IS NOT NULL AND length(btrim(\"EnderecoSnapshot\")) > 0)");
+                            t.HasCheckConstraint("ck_agendamentos_endereco_externo", "\"Modalidade\" <> 'Externo'\nOR (\"EnderecoSnapshot\" IS NOT NULL AND length(btrim(\"EnderecoSnapshot\")) > 0)");
 
                             t.HasCheckConstraint("ck_agendamentos_estado", " \"Estado\" IN ('Agendado', 'Concluido', 'Cancelado') ");
 
@@ -315,6 +315,46 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Ian.Domain.Entities.TelegramAgentTurn", b =>
+                {
+                    b.Property<long>("UpdateId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CommandJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ResponseText")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("SendAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SendState")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("SendStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<long?>("TelegramMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TelegramUserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("UpdateId");
+
+                    b.ToTable("telegram_agent_turns", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_agent_turn_send_attempts", "\"SendAttempts\" >= 0 AND \"SendAttempts\" <= 3");
+
+                            t.HasCheckConstraint("ck_agent_turn_send_state", "\"SendState\" IN ('Pending','Sending','Accepted','Failed','Uncertain')");
+                        });
+                });
+
             modelBuilder.Entity("Ian.Domain.Entities.TelegramBusinessOperation", b =>
                 {
                     b.Property<long>("UpdateId")
@@ -390,11 +430,11 @@ namespace Ian.Infrastructure.Persistence.Migrations
 
                     b.ToTable("telegram_updates_inbox", null, t =>
                         {
-                            t.HasCheckConstraint("ck_telegram_inbox_estado", "\"Estado\" IN (\r\n    'Received',\r\n    'Processing',\r\n    'Completed',\r\n    'FailedRetryable',\r\n    'FailedPaused'\r\n)");
+                            t.HasCheckConstraint("ck_telegram_inbox_estado", "\"Estado\" IN (\n    'Received',\n    'Processing',\n    'Completed',\n    'FailedRetryable',\n    'FailedPaused'\n)");
 
-                            t.HasCheckConstraint("ck_telegram_inbox_lease", "(\r\n    \"Estado\" = 'Processing'\r\n    AND \"LockToken\" IS NOT NULL\r\n    AND \"LockAteUtc\" IS NOT NULL\r\n)\r\nOR\r\n(\r\n    \"Estado\" <> 'Processing'\r\n    AND \"LockToken\" IS NULL\r\n    AND \"LockAteUtc\" IS NULL\r\n)");
+                            t.HasCheckConstraint("ck_telegram_inbox_lease", "(\n    \"Estado\" = 'Processing'\n    AND \"LockToken\" IS NOT NULL\n    AND \"LockAteUtc\" IS NOT NULL\n)\nOR\n(\n    \"Estado\" <> 'Processing'\n    AND \"LockToken\" IS NULL\n    AND \"LockAteUtc\" IS NULL\n)");
 
-                            t.HasCheckConstraint("ck_telegram_inbox_retry", "(\"Estado\" = 'FailedRetryable' AND \"ProximaTentativaEmUtc\" IS NOT NULL)\r\nOR\r\n(\"Estado\" <> 'FailedRetryable' AND \"ProximaTentativaEmUtc\" IS NULL)");
+                            t.HasCheckConstraint("ck_telegram_inbox_retry", "(\"Estado\" = 'FailedRetryable' AND \"ProximaTentativaEmUtc\" IS NOT NULL)\nOR\n(\"Estado\" <> 'FailedRetryable' AND \"ProximaTentativaEmUtc\" IS NULL)");
 
                             t.HasCheckConstraint("ck_telegram_inbox_tentativas", "\"Tentativas\" >= 0");
 
@@ -506,6 +546,15 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AgendamentoId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Ian.Domain.Entities.TelegramAgentTurn", b =>
+                {
+                    b.HasOne("Ian.Domain.Entities.TelegramUpdateInbox", null)
+                        .WithOne()
+                        .HasForeignKey("Ian.Domain.Entities.TelegramAgentTurn", "UpdateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Ian.Domain.Entities.TelegramBusinessOperation", b =>

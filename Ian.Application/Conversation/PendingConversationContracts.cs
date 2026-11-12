@@ -5,6 +5,7 @@ namespace Ian.Application.Conversation;
 public enum PendingIntent
 {
     CadastrarCliente,
+    LocalizarCliente,
     CriarAgendamento,
     AlterarAgendamento
 }

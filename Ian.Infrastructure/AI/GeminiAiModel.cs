@@ -101,7 +101,7 @@ public sealed class GeminiAiModel(
         }
     }
 
-    private static AiModelFailure ClassifyStatus(int status) => status switch
+    internal static AiModelFailure ClassifyStatus(int status) => status switch
     {
         401 or 403 => AiModelFailure.AuthenticationFailed,
         429 => AiModelFailure.QuotaExceeded,

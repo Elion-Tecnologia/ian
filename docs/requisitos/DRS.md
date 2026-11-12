@@ -85,9 +85,11 @@ durável, não interpretação, mutação, envio ou leitura humana.
 
 A inbox implementada usa Received, Processing, Completed, FailedRetryable e
 FailedPaused, com lease/token, heartbeat e tentativas limitadas. Updates
-negados ou sem comando não executam handler administrativo. Os handlers
-textuais de negócio ainda não existem; o provisório pausa comandos
-administrativos com HandlerUnavailable para recuperação controlada.
+negados ou sem comando não executam handler administrativo. A #44 ativa o
+handler textual com MAF/Gemini, Tools e casos de uso reais. Contexto incompleto,
+seleção explícita e confirmação segura persistem entre turnos. O diário por
+update congela a escrita e persiste a resposta; envio incerto não é repetido.
+Registros antigos HandlerUnavailable não são reativados automaticamente.
 
 A barreira `(UpdateId, OperationKey)` de TelegramBusinessOperationExecutor
 deve ser confirmada na mesma transação da escrita. Intenções equivalentes
@@ -225,9 +227,9 @@ como requisito ativo.
 | PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Motor puro na #30; consultas por períodos efetivos e disponibilidade na #32; substituição atômica na #33; encerramento #35 inativa as reservas pelo estado, preservando períodos planejados para consulta histórica. |
 | BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Sem entidade/DbSet ativo; tabela original movida para legado_mvp pela consolidação. |
 | Equipe / ExcecaoExpediente | Fora do modelo ativo; preservar dados legados | Fora do EF ativo; registros, IDs, FKs e sequences preservados em legado_mvp. |
-| SolicitacaoPendente | Estado mínimo durável e versão da operação | Persistência da intenção, campos coletados/faltantes, candidatos, expiração, cancelamento e retomada; integração do diálogo permanece em #44. |
+| SolicitacaoPendente | Estado mínimo durável e versão da operação | Persistência da intenção, campos coletados/faltantes, candidatos, expiração, cancelamento e retomada; diálogo integrado na #44, incluindo localização ambígua, coleta incremental e retomada após reinício. |
 | RegistroAuditoria / EnvioTelegram | Preservar histórico e saída privada | Auditoria mínima transacional de edição na #33 e encerramento na #35; auditoria detalhada fora do escopo. |
-| TelegramUpdateInbox / TelegramBusinessOperation | Preservar controles técnicos | Recebimento, recuperação e executor idempotente implementados. |
+| TelegramUpdateInbox / TelegramBusinessOperation / TelegramAgentTurn | Preservar controles técnicos | Recebimento, recuperação, executor idempotente e diário de comando/resposta/envio da #44 implementados. |
 
 Agendamento implementado: `Id: long`, `ClienteId: long`, `TipoServicoId: long`,
 `Modalidade: ModalidadeServico`, `Duracao: int > 0`,
@@ -244,7 +246,7 @@ A #79 entrega persistência, arquivo legado e mecanismos básicos de concorrênc
 A #30 implementa o motor de períodos e os testes funcionais de 1/7 dias e minutos.
 A #31 integra a criação, cliente novo, períodos, lock global e barreira
 idempotente. A #32 integra consultas combinadas, disponibilidade e texto por
-dia/período. #33/#35 permanecem responsáveis pelas demais mutações. Testes de
+dia/período. #33/#35 implementam as demais mutações e a #44 as conecta ao diálogo e às Tools. Testes de
 callbacks sintéticos da #79 não substituem os testes dos casos de uso reais.
 
 ## 8. Critérios de aceite e testes
