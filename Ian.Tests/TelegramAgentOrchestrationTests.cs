@@ -216,8 +216,8 @@ public sealed partial class TelegramAgentPostgresTests
                 return new(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("{}") };
             if (planning)
             {
-                Assert.Equal("application/json", root.GetProperty("generationConfig").GetProperty("responseMimeType").GetString());
-                Assert.Contains("objetivo", root.GetProperty("generationConfig").ToString());
+                Assert.False(root.GetProperty("generationConfig").TryGetProperty("responseJsonSchema", out _));
+                Assert.True(root.GetProperty("generationConfig").GetProperty("maxOutputTokens").GetInt32() >= 2048);
                 if (state.Failure == "invented_success") return Text("PRIVATE_INVENTED_SUCCESS: Agendamento criado.");
                 var goal = text.Contains("Queria") || text.Contains("Gostaria") || text.Contains("Preciso") ? "CriarAgendamento" : "Continuar";
                 var reply = text.Contains("isto") ? "ExplicarCatalogo" : text.Contains("Consulte") ? "Resultado" : "Coletar";

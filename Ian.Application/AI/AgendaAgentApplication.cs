@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Ian.Application.Agenda;
 using Ian.Application.Catalogo;
 using Ian.Application.Clientes;
@@ -31,7 +32,17 @@ public sealed class AgendaAgentApplication(
         {
             var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken);
             if (pending is null && interpretation.Plan.Objetivo == DialogueGoal.CriarAgendamento)
-                turn.PendingResult = await PrepararAsync(new CriarAgendamentoToolRequest(null, null, null, null, null, null, null, null), cancellationToken);
+            {
+                var today = Regex.IsMatch(turn.Text, @"\bhoje\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+                    ? DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo")).DateTime)
+                    : (DateOnly?)null;
+                turn.PendingResult = await PrepararAsync(new CriarAgendamentoToolRequest(null, null, null, today, null, null, null, null), cancellationToken);
+                pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken);
+            }
+            if (pending?.Intent == PendingIntent.CriarAgendamento && interpretation.Plan.Objetivo == DialogueGoal.CriarAgendamento &&
+                Regex.IsMatch(turn.Text, @"\b(restante|resto)\b.{0,30}\b(dia|hoje)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                await conversations.UpdateAsync(UserId, new Dictionary<string, string> { ["periodoRestante"] = "true" },
+                    pending.MissingFields, null, clock.GetUtcNow(), cancellationToken);
             return AgentToolResult.Succeeded("Objetivo recuperado para este turno.");
         }
         if (turn.SelectionRequired && request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest)
@@ -177,19 +188,27 @@ public sealed class AgendaAgentApplication(
             return AgentToolResult.ConflictResult("Cliente não encontrado. Localize novamente o cliente.");
 
         var tipo = (await catalogo.ListarAsync(ct)).SingleOrDefault(t => t.Id == r.TipoServicoId);
+        var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
+        var clarifyPeriod = pending?.CollectedFields.GetValueOrDefault("periodoRestante") == "true";
         var missing = new List<string>();
         if (string.IsNullOrWhiteSpace(r.NomeCliente)) missing.Add("nome do cliente");
         if (string.IsNullOrWhiteSpace(r.TelefoneCliente)) missing.Add("telefone com DDD");
         if (tipo is null) missing.Add("serviço desejado");
         if (r.Data is null) missing.Add("data");
+        if (clarifyPeriod)
+        {
+            if (r.Horario is null) missing.Add("horário");
+            if (r.Duracao is null) missing.Add("duração");
+            if (r.UnidadeDuracao is null) missing.Add("unidade da duração");
+        }
         var effective = r;
         var horarioDivergente = false;
         if (tipo is not null)
         {
             // Keep inferred catalog defaults out of the collected request. A later service change
             // must use that service's defaults unless an override was actually collected.
-            effective = r with { Modalidade = r.Modalidade ?? tipo.ModalidadePadrao.ToString(), Duracao = r.Duracao ?? tipo.DuracaoPadrao,
-                UnidadeDuracao = r.UnidadeDuracao ?? tipo.UnidadeDuracaoPadrao.ToString() };
+            effective = r with { Modalidade = r.Modalidade ?? tipo.ModalidadePadrao.ToString(), Duracao = r.Duracao ?? (clarifyPeriod ? null : tipo.DuracaoPadrao),
+                UnidadeDuracao = r.UnidadeDuracao ?? (clarifyPeriod ? null : tipo.UnidadeDuracaoPadrao.ToString()) };
             if (TryEnum<UnidadeDuracao>(effective.UnidadeDuracao, out var unit) && unit == UnidadeDuracao.Minutos && r.Horario is null) missing.Add("horário");
             horarioDivergente = unit == UnidadeDuracao.DiasCorridos && r.Horario is { } inicio && inicio != new TimeOnly(8, 0);
             if (TryEnum<ModalidadeServico>(effective.Modalidade, out var mode) && mode == ModalidadeServico.Externo && string.IsNullOrWhiteSpace(r.EnderecoServico))
@@ -204,8 +223,7 @@ public sealed class AgendaAgentApplication(
             ? AgentToolResult.Missing("Os dados do pedido estão completos. Informe se deseja prosseguir com o agendamento.")
             : await PersistirAsync(effective, ct);
         var campos = missing.Where(c => c != "horário de início").ToArray();
-        var questions = campos.Length == 0 ? [] : CollectionQuestions(campos[0]);
-        var mensagem = questions.FirstOrDefault() ?? "";
+        var mensagem = campos.Length == 0 ? "" : CollectionQuestion(campos[0]);
         var clarification = "";
         if (horarioDivergente)
             clarification = $"Você pediu início às {r.Horario:HH:mm}. Serviços em dias corridos reservam 08h–18h em cada data, inclusive a primeira. " +
@@ -213,7 +231,9 @@ public sealed class AgendaAgentApplication(
         if (clarification.Length > 0) mensagem = (mensagem + " " + clarification).Trim();
         var result = AgentToolResult.Missing(mensagem) with
         {
-            RedacoesPermitidas = questions.Skip(1).Select(q => (q + " " + clarification).Trim()).ToArray()
+            DialogueMode = campos.Length > 0 ? AgentDialogueMode.Collection : AgentDialogueMode.Protected,
+            QuestionTopic = campos.Length > 0 ? Topic(campos[0]) : null,
+            RequiredFacts = string.IsNullOrWhiteSpace(clarification) ? null : clarification
         };
         if (horarioDivergente) turn.ClarificationResult = result;
         return result;
@@ -356,6 +376,8 @@ public sealed class AgendaAgentApplication(
         if (result.Outcome == AgentToolOutcome.Success && request is ConfirmarCancelamentoCommand cancelamento &&
             cancelamento.Acceptance.Arguments.AgendamentoId is { } cancelado)
             result = await ResumoAsync(cancelado, "Agendamento cancelado", ct);
+        if (result.Outcome == AgentToolOutcome.Error && result.FailureCategory == AgentFailureCategory.Unknown)
+            result = result with { FailureCategory = AgentFailureCategory.ToolFailure };
         turn.MutationResult = result;
         if (result.Outcome == AgentToolOutcome.Success)
         {
@@ -390,7 +412,7 @@ public sealed class AgendaAgentApplication(
             return AgentToolResult.Missing("Qual data ou período deseja consultar?");
         var result = await consulta.ConsultarAsync(new(r.DataInicial, r.DataFinal, r.ClienteId, AgendamentoId: r.AgendamentoId, Limite: 10), ct);
         if (result.Estado == EstadoConsultaAgendamentos.Invalido) return AgentToolResult.Missing("Informe um período válido.");
-        if (result.Agendamentos.Count == 0) return AgentToolResult.Succeeded("Nenhum agendamento encontrado.");
+        if (result.Agendamentos.Count == 0) return AgentToolResult.Succeeded("Nenhum agendamento encontrado para essa consulta. Quer verificar outra data?");
         var periodos = result.Agendamentos.SelectMany(a => a.Periodos).ToArray();
         var inicio = r.DataInicial ?? periodos.Min(p => p.Data);
         var fim = r.DataFinal ?? (r.DataInicial is null ? periodos.Max(p => p.Data) : inicio);
@@ -426,6 +448,8 @@ public sealed class AgendaAgentApplication(
         if (turn.LastResult is { Outcome: AgentToolOutcome.Error or AgentToolOutcome.Conflict or AgentToolOutcome.Ambiguous or AgentToolOutcome.ConfirmationRequired } refused) return refused;
         var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
         if (pending?.CandidateIds.Count > 0) return await EsclarecerAsync(ct);
+        if (plan.Objetivo == DialogueGoal.Conversa && plan.Resposta is DialogueReply.Esclarecer or DialogueReply.Resultado)
+            return AgentToolResult.Missing("Estou por aqui! Como posso ajudar?") with { DialogueMode = AgentDialogueMode.Social };
         AgentToolResult? pergunta = turn.PendingResult;
         if (pending?.Intent == PendingIntent.CriarAgendamento &&
             pending.CollectedFields.GetValueOrDefault("request") is { } request)
@@ -435,28 +459,31 @@ public sealed class AgendaAgentApplication(
             var catalog = await ServicosAsync(ct);
             var texto = "Essa é a lista de serviços que você pode agendar. As durações são os padrões de cada serviço e podem ser informadas no pedido.\n" + catalog.Message;
             texto += "\nServiços em dias corridos reservam 08h–18h em cada data, inclusive a primeira.";
-            return AgentToolResult.Succeeded(texto + "\n" + (pergunta?.Message ?? "Qual serviço você deseja agendar?"));
+            return AgentToolResult.Succeeded(texto + "\n" + (pergunta?.Message ?? "Qual serviço você deseja agendar?")) with
+                { DialogueMode = AgentDialogueMode.Explanation };
         }
         if (plan.Resposta == DialogueReply.ExplicarPedido && pergunta is not null)
-            return AgentToolResult.Missing("Esses dados são necessários para reservar o serviço corretamente. " + pergunta.Message);
+            return AgentToolResult.Missing("Esses dados são necessários para reservar o serviço corretamente. " + pergunta.Message) with
+                { DialogueMode = AgentDialogueMode.Explanation };
         if (pergunta is not null && (plan.Objetivo is DialogueGoal.CriarAgendamento or DialogueGoal.Continuar || plan.Resposta == DialogueReply.Coletar))
             return turn.CatalogResult is { } catalogo ? pergunta with
             {
                 Message = pergunta.Message + "\n" + catalogo.Message,
-                RedacoesPermitidas = pergunta.RedacoesPermitidas?.Select(s => s + "\n" + catalogo.Message).ToArray()
+                RequiredFacts = (pergunta.RequiredFacts is null ? "" : pergunta.RequiredFacts + "\n") + catalogo.Message
             } : pergunta;
         return turn.PendingResult ?? turn.LastResult ?? pergunta ?? AgentToolResult.Missing("Qual informação da agenda você deseja consultar ou organizar?");
     }
     private async Task<AgentToolResult> EsclarecerAsync(CancellationToken ct)
     {
         var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
-        if (pending is null) return AgentToolResult.Missing("Como posso ajudar com sua agenda?");
+        if (pending is null) return AgentToolResult.Missing("Como posso ajudar com sua agenda?") with { DialogueMode = AgentDialogueMode.Social };
         if (pending.CandidateIds.Count > 0)
             return AgentToolResult.Ambiguity("Para continuar seu pedido, selecione um dos clientes ou agendamentos apresentados.");
         // An unclear turn must neither discard the goal nor execute an otherwise complete request.
         return AgentToolResult.Missing(pending.Intent == PendingIntent.CriarAgendamento
             ? "Seu agendamento continua pendente. Você pode completar os dados solicitados ou me dizer o que deseja esclarecer."
-            : "Seu pedido continua pendente. Você pode completar os dados solicitados ou me dizer o que deseja esclarecer.");
+            : "Seu pedido continua pendente. Você pode completar os dados solicitados ou me dizer o que deseja esclarecer.") with
+                { DialogueMode = AgentDialogueMode.Explanation };
     }
     private async Task<AgentToolResult> ServicosAsync(CancellationToken ct)
     {
@@ -480,36 +507,30 @@ public sealed class AgendaAgentApplication(
         var endereco = a.EnderecoServico is null ? "" : $"\nEndereço: {a.EnderecoServico}.";
         var observacoes = string.IsNullOrWhiteSpace(a.Observacoes) ? "" : $"\nObservações: {a.Observacoes}";
         var details = $"{a.TipoServicoNome} para {a.ClienteNome}, {datas}.\n{Duracao(a.Duracao, a.UnidadeDuracao)} – {horarios}.{endereco}{observacoes}";
-        var introduction = titulo switch
-        {
-            "Agendamento criado" => "Pronto, ficou agendado: ",
-            "Agendamento atualizado" => "Atualizei o agendamento: ",
-            "Agendamento concluído" => "Marquei como concluído: ",
-            "Agendamento cancelado" => "O agendamento foi cancelado: ",
-            _ => null
-        };
-        return AgentToolResult.Succeeded($"{titulo}: {details}") with
-        {
-            RedacoesPermitidas = introduction is null ? null : [introduction + details]
-        };
+        return AgentToolResult.Succeeded($"{titulo}: {details}\nReferência do agendamento: #{a.Id}.");
     }
     private static string Duracao(int valor, UnidadeDuracao unidade) => unidade == UnidadeDuracao.DiasCorridos
         ? $"{valor} {(valor == 1 ? "dia corrido" : "dias corridos")}" : $"{valor} minutos";
-    private static string[] CollectionQuestions(string field) => field switch
+    private static string CollectionQuestion(string field) => field switch
     {
-        "nome do cliente" or "nome" => ["Qual é o nome do cliente?", "Pode me dizer o nome do cliente?"],
-        "telefone com DDD" or "telefone" => ["Qual é o telefone com DDD do cliente?", "Pode me passar o telefone do cliente com DDD?"],
-        "serviço desejado" => ["Qual serviço você deseja agendar?", "Que serviço você quer marcar?"],
-        "data" => ["Para qual data você quer agendar?", "Em que dia você precisa do serviço?"],
-        "horário" => ["Qual horário você prefere?", "A que horas você quer iniciar o serviço?"],
-        "endereço do serviço" or "endereço principal" => ["Qual é o endereço do serviço?", "Em qual endereço será o serviço?"],
-        _ => [$"Pode informar {field} para continuarmos?"]
+        "nome do cliente" or "nome" => "Qual é o nome do cliente?",
+        "telefone com DDD" or "telefone" => "Qual é o telefone com DDD do cliente?",
+        "serviço desejado" => "Qual serviço você deseja agendar?",
+        "data" => "Para qual data você quer agendar?",
+        "horário" => "Qual horário você prefere?",
+        "duração" => "Por quanto tempo você precisa do serviço?",
+        "unidade da duração" => "Essa duração é em minutos ou dias corridos?",
+        "endereço do serviço" or "endereço principal" => "Qual é o endereço do serviço?",
+        _ => $"Pode informar {field} para continuarmos?"
     };
-    private static AgentToolResult Missing(IReadOnlyList<string> fields)
+    private static AgentToolResult Missing(IReadOnlyList<string> fields) =>
+        AgentToolResult.Missing(CollectionQuestion(fields[0])) with
+            { DialogueMode = AgentDialogueMode.Collection, QuestionTopic = Topic(fields[0]) };
+    private static string Topic(string field) => field switch
     {
-        var questions = CollectionQuestions(fields[0]);
-        return AgentToolResult.Missing(questions[0]) with { RedacoesPermitidas = questions.Skip(1).ToArray() };
-    }
+        "nome do cliente" => "nome", "telefone com DDD" => "telefone", "serviço desejado" => "serviço",
+        "endereço do serviço" or "endereço principal" => "endereço", "unidade da duração" => "unidade", _ => field
+    };
     private static bool TryEnum<T>(string? value, out T parsed) where T : struct, Enum =>
         Enum.TryParse(value, true, out parsed) && Enum.IsDefined(parsed) && Enum.GetNames<T>().Contains(value, StringComparer.OrdinalIgnoreCase);
 }

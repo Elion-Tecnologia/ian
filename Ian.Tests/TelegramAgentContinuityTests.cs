@@ -133,7 +133,8 @@ public sealed partial class TelegramAgentPostgresTests
         await f.SendAsync(1, "Montagem para Ana em 07/01/2030 na Rua A.");
         f.Model.Failure = new HttpRequestException("PRIVATE_PROVIDER_ERROR");
         await f.SendAsync(2, "11999999999");
-        Assert.Equal("Não foi possível concluir a solicitação.", f.Transport.Replies[^1]);
+        Assert.Contains("telefone", f.Transport.Replies[^1]); // Contextual fallback preserves the pending question.
+        Assert.DoesNotContain("PRIVATE_", f.Transport.Replies[^1]);
         await using (var db = PostgresTestDatabase.CreateContext()) Assert.Empty(await db.Agendamentos.ToListAsync());
         f.Restart();
         f.Model.Failure = null;

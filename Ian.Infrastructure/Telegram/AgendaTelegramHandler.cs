@@ -97,11 +97,41 @@ public sealed partial class AgendaTelegramHandler(
         // Resolve the authoritative outcome first, then validate wording without executing Tools.
         if (run.IsSuccess && AgentDialoguePlan.Parse(run.Text) is { } plan)
         {
+            if (plan.Objetivo == DialogueGoal.Conversa && pending is null && SchedulingText().IsMatch(text))
+            {
+                // A natural collection question must not silently lose an explicit new scheduling goal.
+                await backend.ExecuteAsync(new InterpretarTurnoRequest(new(DialogueGoal.CriarAgendamento, DialogueReply.Coletar)), ct);
+                plan = plan with { Objetivo = DialogueGoal.CriarAgendamento, Resposta = DialogueReply.Coletar };
+                logger?.LogInformation("Update {UpdateId} stage=intent_recovered category=NaturalCollection.", context.UpdateId);
+            }
             var trusted = await backend.ComposeDialogueAsync(plan, ct);
-            return AgentResponseComposer.Compose(trusted, plan.Texto, history.Count > 0);
+            var composed = AgentResponseComposer.Compose(trusted, plan.Texto, history.Count > 0);
+            var source = ReferenceEquals(composed, trusted) ? "Backend" : "Natural";
+            var compositionCategory = source == "Natural" ? "Accepted" : trusted.DialogueMode == AgentDialogueMode.Protected ? "ProtectedOutcome"
+                : string.IsNullOrWhiteSpace(plan.Texto) ? "NoDraft" : "DraftRejected";
+            logger?.LogInformation("Update {UpdateId} stage=response_composed mode={Mode} source={Source} category={Category} outcome={Outcome}.",
+                context.UpdateId, trusted.DialogueMode, source, compositionCategory, composed.Outcome);
+            return composed;
         }
-        return context.MutationResult ?? context.PendingResult ?? context.LastResult ??
-            AgentToolResult.Failed("Não foi possível interpretar o pedido. Tente novamente com os dados da operação.");
+        // A provider/wording failure is not evidence that a committed operation failed.
+        var safe = context.MutationResult ?? context.PendingResult ?? context.LastResult;
+        if (safe is null && pending is not null)
+            safe = await backend.ComposeDialogueAsync(new(DialogueGoal.Continuar, DialogueReply.Coletar), ct);
+        if (safe is null && pending is null && SchedulingText().IsMatch(text))
+        {
+            // Failure-only recovery can initiate collection, never a write or replacement of another goal.
+            await backend.ExecuteAsync(new InterpretarTurnoRequest(new(DialogueGoal.CriarAgendamento, DialogueReply.Coletar)), ct);
+            safe = await backend.ComposeDialogueAsync(new(DialogueGoal.CriarAgendamento, DialogueReply.Coletar), ct);
+        }
+        var category = run.Failure switch
+        {
+            AiModelFailure.Timeout => AgentFailureCategory.ModelTimeout,
+            AiModelFailure.InvalidResponse => AgentFailureCategory.ModelInvalidResponse,
+            _ => AgentFailureCategory.ModelFailure
+        };
+        logger?.LogWarning("Update {UpdateId} stage=response_fallback category={Category} recovered={Recovered} outcome={Outcome}.",
+            context.UpdateId, category, safe is not null, safe?.Outcome);
+        return safe ?? AgentToolResult.Failed("Falha ao interpretar o pedido.", category);
     }
 
     private static string Limit(string text)
@@ -110,6 +140,8 @@ public sealed partial class AgendaTelegramHandler(
         var length = char.IsHighSurrogate(text[3999]) ? 3999 : 4000;
         return text[..(length - 50)] + "\nHá mais dados; refine os filtros da consulta.";
     }
+    [GeneratedRegex(@"^\s*(?:eu\s+)?(?:quero|queria|gostaria de|preciso)\s+(?:agendar|marcar|reservar)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SchedulingText();
     [GeneratedRegex(@"^confirmar\s+([a-fA-F0-9-]{32,36})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ConfirmText();
     [GeneratedRegex(@"^(?:(cliente|agendamento)\s+)?#?(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

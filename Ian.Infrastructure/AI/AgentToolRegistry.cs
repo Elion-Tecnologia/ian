@@ -3,6 +3,7 @@ using Ian.Domain.Clientes;
 using Ian.Infrastructure.Telegram;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace Ian.Infrastructure.AI;
@@ -63,7 +64,7 @@ public sealed class AgentToolRegistry(
         AgentToolResult Record(AgentToolResult result)
         {
             if (logger is not null) Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(logger,
-                "Update {UpdateId} stage=tool_completed tool={Tool} outcome={Outcome}.", turn?.UpdateId, request.GetType().Name, result.Outcome);
+                "Update {UpdateId} stage=tool_completed tool={Tool} outcome={Outcome} category={Category}.", turn?.UpdateId, request.GetType().Name, result.Outcome, result.FailureCategory);
             if (turn is not null)
             {
                 turn.LastResult = result;
@@ -74,21 +75,32 @@ public sealed class AgentToolRegistry(
         }
         if (!Ian.Application.Conversation.OperationConfirmationPolicy.IsAuthorized(caller, telegram.Value.AdministratorUserId))
             return Record(AgentToolResult.Failed("Solicitação não autorizada."));
-        if (!budget.TryStartToolCall()) return Record(AgentToolResult.Failed("Limite de chamadas de ferramentas atingido."));
-        if (Invalid(request)) return Record(AgentToolResult.Failed("Dados inválidos. Use IDs positivos, telefone com DDD e valores dentro dos limites."));
+        if (!budget.TryStartToolCall()) return Record(AgentToolResult.Failed("Limite de chamadas de ferramentas atingido.", AgentFailureCategory.ToolLimit));
+        if (Invalid(request)) return Record(AgentToolResult.Failed("Dados inválidos. Use IDs positivos, telefone com DDD e valores dentro dos limites.", AgentFailureCategory.InvalidArguments));
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(AgentExecutionLimits.ToolTimeoutSeconds));
         try
         {
             var result = await backend.ExecuteAsync(request, timeout.Token);
-            if (result is null) return Record(AgentToolResult.Failed("A operação não retornou resultado válido."));
+            if (result is null) return Record(AgentToolResult.Failed("A operação não retornou resultado válido.", AgentFailureCategory.ToolFailure));
             if (JsonSerializer.Serialize(result).Length > AgentExecutionLimits.MaxToolResultCharacters)
-                return Record(AgentToolResult.Failed("O resultado excedeu o limite permitido. Refine a consulta."));
+                return Record(AgentToolResult.Failed("O resultado excedeu o limite permitido. Refine a consulta.", AgentFailureCategory.ToolFailure));
+            if (result.Outcome == AgentToolOutcome.Error && result.FailureCategory == AgentFailureCategory.Unknown)
+                result = result with { FailureCategory = AgentFailureCategory.ToolFailure };
             return Record(result);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch (OperationCanceledException) { return Record(AgentToolResult.Failed("A operação excedeu o tempo limite. Consulte a agenda antes de repetir.")); }
-        catch (Exception) { return Record(AgentToolResult.Failed("Não foi possível concluir a operação. Consulte a agenda antes de repetir.")); }
+        catch (OperationCanceledException)
+        {
+            logger?.LogWarning("Update {UpdateId} stage=tool_failed category=Timeout tool={Tool}.", turn?.UpdateId, request.GetType().Name);
+            return Record(AgentToolResult.Failed("A operação excedeu o tempo limite.", AgentFailureCategory.ToolTimeout));
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning("Update {UpdateId} stage=tool_failed category=BackendFailure tool={Tool} exception_type={ExceptionType}.",
+                turn?.UpdateId, request.GetType().Name, ex.GetType().Name);
+            return Record(AgentToolResult.Failed("Não foi possível concluir a operação.", AgentFailureCategory.ToolFailure));
+        }
     }
 
     private static bool Invalid(AgentToolRequest request) => request switch

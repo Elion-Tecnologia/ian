@@ -12,6 +12,9 @@ public enum AgentToolOutcome
     Error
 }
 
+public enum AgentDialogueMode { Protected, Social, Collection, Explanation }
+public enum AgentFailureCategory { Unknown, ModelFailure, ModelInvalidResponse, ModelTimeout, ToolFailure, ToolTimeout, InvalidArguments, ToolLimit }
+
 public sealed record AgentToolResult
 {
     private AgentToolResult(AgentToolOutcome outcome, string message, object? data = null)
@@ -27,9 +30,11 @@ public sealed record AgentToolResult
     public string Message { get; init; }
     public object? Data { get; init; }
 
-    // Only backend-authored alternatives may replace the factual message.
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<string>? RedacoesPermitidas { get; init; }
+    [JsonConverter(typeof(JsonStringEnumConverter<AgentDialogueMode>))]
+    public AgentDialogueMode DialogueMode { get; init; }
+    public string? QuestionTopic { get; init; }
+    public string? RequiredFacts { get; init; }
+    public AgentFailureCategory FailureCategory { get; init; }
 
     public static AgentToolResult Succeeded(string message, object? data = null) =>
         new(AgentToolOutcome.Success, message, data);
@@ -38,7 +43,8 @@ public sealed record AgentToolResult
     public static AgentToolResult Ambiguity(string message, object? data = null) => new(AgentToolOutcome.Ambiguous, message, data);
     public static AgentToolResult ConflictResult(string message) => new(AgentToolOutcome.Conflict, message);
     public static AgentToolResult RequiresConfirmation(string message, object? data = null) => new(AgentToolOutcome.ConfirmationRequired, message, data);
-    public static AgentToolResult Failed(string message) => new(AgentToolOutcome.Error, message);
+    public static AgentToolResult Failed(string message, AgentFailureCategory category = AgentFailureCategory.Unknown) =>
+        new(AgentToolOutcome.Error, message) { FailureCategory = category };
 }
 
 /// <summary>Trusted Telegram metadata supplied by the application host, never by the model.</summary>
@@ -93,7 +99,7 @@ public sealed class AgentExecutionBudget
 
 public static class AgentToolPolicy
 {
-    public const string SystemInstructions = "Você é o assistente textual da agenda. Interprete a intenção em português natural e use a ferramenta correspondente mesmo com dados parciais ou sem argumentos. Um pedido de agendar inicia criar_agendamento; não exija palavras exatas nem que a pessoa escolha entre operações. Cadastro e localização de cliente são etapas intermediárias quando há um agendamento pendente. Preserve esse objetivo e use somente os novos dados informados. Se não houver intenção identificável, use esclarecer_pedido, sem inventar uma operação. O backend decide validação, disponibilidade, autorização e confirmação. Nunca afirme que uma operação ocorreu sem resultado Success. Em MissingData ou Ambiguous, peça esclarecimento; em Conflict, explique que não foi concluída; em ConfirmationRequired, peça confirmação explícita; em Error, informe que não foi possível concluir. Não invente dados nem exponha detalhes internos.";
+    public const string SystemInstructions = "Você é o assistente textual da agenda. Interprete a intenção em português natural e use a ferramenta correspondente mesmo com dados parciais ou sem argumentos. Um pedido de agendar inicia criar_agendamento; não exija palavras exatas nem que a pessoa escolha entre operações. Cadastro e localização de cliente são etapas intermediárias quando há um agendamento pendente. Preserve esse objetivo e use somente os novos dados informados. Saudações e conversa cotidiana não exigem Tools. Use esclarecer_pedido apenas quando precisar recuperar o pedido pendente; nunca invente uma operação. O backend decide validação, disponibilidade, autorização e confirmação. Nunca afirme que uma operação ocorreu sem resultado Success. Em MissingData ou Ambiguous, peça esclarecimento; em Conflict, explique que não foi concluída; em ConfirmationRequired, peça confirmação explícita; em Error, informe que não foi possível concluir. Não invente dados nem exponha detalhes internos.";
 }
 
 public static class AgentToolResultTranslator
@@ -102,7 +108,17 @@ public static class AgentToolResultTranslator
     {
         if (result is null) return "Não foi possível concluir a solicitação.";
         if (result.Outcome == AgentToolOutcome.Error)
-            return "Não foi possível concluir a solicitação.";
+            return result.FailureCategory switch
+            {
+                AgentFailureCategory.ModelTimeout => "O assistente demorou mais que o esperado. Pode tentar novamente?",
+                AgentFailureCategory.ModelInvalidResponse => "Não consegui entender a resposta do assistente. Pode reformular o pedido?",
+                AgentFailureCategory.ModelFailure => "O assistente está temporariamente indisponível. Seu pedido pode ser retomado quando ele voltar.",
+                AgentFailureCategory.ToolTimeout => "A operação demorou mais que o esperado. Consulte a agenda antes de repetir o pedido.",
+                AgentFailureCategory.ToolFailure => "Não consegui concluir a operação. Consulte a agenda antes de tentar novamente.",
+                AgentFailureCategory.InvalidArguments => "Não consegui usar esses dados. Pode conferir as informações do pedido?",
+                AgentFailureCategory.ToolLimit => "O pedido precisou de muitas etapas. Vamos continuar com uma informação por vez?",
+                _ => "Não foi possível concluir a solicitação."
+            };
         var message = string.IsNullOrWhiteSpace(result.Message)
             ? "Não foi possível concluir a solicitação."
             : result.Message.Trim();
