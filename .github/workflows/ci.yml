@@ -57,7 +57,7 @@ jobs:
           --logger "trx;LogFilePrefix=ian-tests"
           --results-directory "${{ runner.temp }}/ian-test-results"
 
-      - name: Test conversation and confirmation persistence
+      - name: Test agenda, conversation and confirmation persistence
         id: persistence-tests
         env:
           IAN_TEST_POSTGRES_DATABASE: ian_t22_tests
@@ -67,7 +67,7 @@ jobs:
           --configuration Release
           --no-build
           --no-restore
-          --filter "FullyQualifiedName~OperationConfirmationPostgresTests|FullyQualifiedName~PendingConversationPostgresTests"
+          --filter "FullyQualifiedName~OperationConfirmationPostgresTests|FullyQualifiedName~PendingConversationPostgresTests|FullyQualifiedName~EdicaoAgendamentoPostgresTests|FullyQualifiedName~CriacaoAgendamentoPostgresTests|FullyQualifiedName~ConsultaAgendaPostgresTests|FullyQualifiedName~AgendaConcurrencyPostgresTests"
           --logger "trx;LogFilePrefix=ian-persistence-tests"
           --results-directory "${{ runner.temp }}/ian-test-results"
 

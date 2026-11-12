@@ -112,6 +112,9 @@ public static class DependencyInjection
             provider.GetRequiredService<AgendaMutationExecutor>());
         services.AddScoped<IAgendaCriacaoStore, PostgresAgendaCriacaoStore>();
         services.AddScoped<ICriacaoAgendamento, CriacaoAgendamentoApplication>();
+        services.AddScoped<IAgendaEdicaoStore, PostgresAgendaEdicaoStore>();
+        services.AddScoped<IEdicaoAgendamento, EdicaoAgendamentoApplication>();
+        services.AddScoped<SelecaoEdicaoAgendamentoApplication>();
         services.AddScoped<IConsultaAgendaStore, PostgresConsultaAgendaStore>();
         services.AddScoped<IConsultaAgenda, ConsultaAgendaApplication>();
         services.AddScoped<IDisponibilidadeAgenda, DisponibilidadeAgendaApplication>();

@@ -49,7 +49,8 @@ public sealed record AgendamentoConsultaItem(
     IReadOnlyList<PeriodoAgendaItem> Periodos,
     string? EnderecoServico,
     string? Observacoes,
-    EstadoAgendamento Estado);
+    EstadoAgendamento Estado,
+    long Versao = 1);
 
 public sealed record ResultadoConsultaAgendamentos(
     EstadoConsultaAgendamentos Estado,
@@ -117,7 +118,8 @@ public sealed record AgendamentoAgendaStoreItem(
     IReadOnlyList<PeriodoAgendaStoreItem> Periodos,
     string? EnderecoServico,
     string? Observacoes,
-    EstadoAgendamento Estado);
+    EstadoAgendamento Estado,
+    long Versao = 1);
 
 public interface IConsultaAgendaStore
 {
