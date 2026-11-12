@@ -99,6 +99,22 @@ public sealed partial class TelegramAgentPostgresTests
         AssertStage(f, 1, "intent_recovered");
     }
 
+    [PostgresFact]
+    public async Task ReciboLongoMantemReferenciaExataAntesDoLimiteDoTelegram()
+    {
+        await using var f = await Fixture.CreateAsync();
+        f.Model.Tool("criar_agendamento", new { nomeCliente = "Ana", telefoneCliente = "11999999999", tipoServicoId = 2L,
+            data = "2030-01-07", enderecoServico = new string('A', 2000), observacoes = new string('B', 2000) });
+        await f.SendAsync(1, "Monte o serviço conforme os dados fornecidos.");
+        var receipt = Assert.Single(f.Transport.Replies);
+        Assert.True(receipt.Length <= 4000);
+        Assert.Contains("Agendamento criado (#1)", receipt);
+        Assert.Contains("Ana", receipt);
+        Assert.Contains("07/01/2030", receipt);
+        await using var db = PostgresTestDatabase.CreateContext();
+        Assert.Single(await db.Agendamentos.ToListAsync());
+    }
+
     [PostgresTheory]
     [InlineData("provider", "ProviderUnavailable", "ModelFailure")]
     [InlineData("invalid", "InvalidResponse", "ModelInvalidResponse")]

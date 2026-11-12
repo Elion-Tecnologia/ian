@@ -507,7 +507,7 @@ public sealed class AgendaAgentApplication(
         var endereco = a.EnderecoServico is null ? "" : $"\nEndereço: {a.EnderecoServico}.";
         var observacoes = string.IsNullOrWhiteSpace(a.Observacoes) ? "" : $"\nObservações: {a.Observacoes}";
         var details = $"{a.TipoServicoNome} para {a.ClienteNome}, {datas}.\n{Duracao(a.Duracao, a.UnidadeDuracao)} – {horarios}.{endereco}{observacoes}";
-        return AgentToolResult.Succeeded($"{titulo}: {details}\nReferência do agendamento: #{a.Id}.");
+        return AgentToolResult.Succeeded($"{titulo} (#{a.Id}): {details}");
     }
     private static string Duracao(int valor, UnidadeDuracao unidade) => unidade == UnidadeDuracao.DiasCorridos
         ? $"{valor} {(valor == 1 ? "dia corrido" : "dias corridos")}" : $"{valor} minutos";
