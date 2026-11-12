@@ -50,7 +50,8 @@ public static class DependencyInjection
         services.AddScoped<IAgendaAgentRunner>(provider => new GeminiAgendaAgentRunner(
             provider.GetRequiredService<IOptions<GeminiOptions>>(),
             provider.GetRequiredService<GeminiChatClientFactory>().GetClient,
-            provider.GetRequiredService<IAgentToolRegistry>()));
+            provider.GetRequiredService<IAgentToolRegistry>(), provider.GetRequiredService<AgentTurnContext>(),
+            provider.GetService<ILogger<GeminiAgendaAgentRunner>>()));
         services.AddScoped<AgentExecutionBudget>();
         services.AddScoped<IAgentToolRegistry, AgentToolRegistry>();
 

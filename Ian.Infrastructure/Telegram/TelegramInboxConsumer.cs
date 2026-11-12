@@ -31,6 +31,7 @@ public sealed class TelegramInboxConsumer(
 
         var updateId = claimed.Update.UpdateId;
         var correlationId = $"tg-{updateId}";
+        logger.LogInformation("Update {UpdateId} stage=inbox_claimed attempt={Attempt}.", updateId, claimed.Attempt);
 
         using var activity = ActivitySource.StartActivity(
             "telegram.inbox.process");
@@ -91,6 +92,7 @@ public sealed class TelegramInboxConsumer(
                     "Update {UpdateId} não foi concluído: lease inválido.",
                     updateId);
             }
+            logger.LogInformation("Update {UpdateId} stage=inbox_completed completed={Completed} decision={Decision}.", updateId, completed, decision);
         }
         catch (TelegramHandlerUnavailableException)
         {
@@ -108,6 +110,7 @@ public sealed class TelegramInboxConsumer(
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
         {
+            logger.LogInformation("Update {UpdateId} stage=inbox_cancelled reason=host_stopping.", updateId);
             // Encerramento do processo.
             // O lease expirará e o update poderá ser retomado.
         }
@@ -140,8 +143,8 @@ public sealed class TelegramInboxConsumer(
                 cancellationToken);
 
             logger.LogWarning(
-                "Falha ao processar update {UpdateId}.",
-                updateId);
+                "Update {UpdateId} stage=inbox_failed retry_scheduled={Retry} attempt={Attempt}.",
+                updateId, nextRetry is not null, claimed.Attempt);
         }
         finally
         {

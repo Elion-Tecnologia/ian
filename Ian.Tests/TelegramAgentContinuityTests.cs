@@ -17,7 +17,7 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.Contains("serviço desejado", f.Transport.Replies[^1]);
         Assert.Contains("nome do cliente", f.Transport.Replies[^1]);
         Assert.DoesNotContain("operações", f.Transport.Replies[^1]);
-        Assert.Equal("ANY", f.Model.ToolModes[0]);
+        Assert.Equal("NONE", f.Model.ToolModes[0]);
 
         f.Model.Tool("criar_agendamento", new { nomeCliente = "Ana", tipoServicoId = 2L,
             data = "2030-01-07", horario = "10:00", enderecoServico = "Rua Fictícia, 123" });

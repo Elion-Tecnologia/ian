@@ -436,10 +436,14 @@ formatação #32. As unidades são Minutos/DiasCorridos e modalidades
 Interno/Externo/Remoto, alinhadas ao Domain. Os contratos anteriores Horas/NaLoja
 não correspondiam ao modelo implementado e foram substituídos.
 
-A regressão #96 acrescenta esclarecer_pedido, sem escrita, para saudações ou
-intenção desconhecida. A chamada inicial exige uma Tool (RequireAny); pedidos de
-agendar usam criar_agendamento com dados parciais, inclusive sem argumentos,
-persistindo a intenção desde o início. Não há classificação por palavras exatas.
+A regressão #96 acrescentou esclarecer_pedido, sem escrita. A #98 substitui
+RequireAny por interpretação estruturada antes das Tools, sem funções disponíveis
+nessa primeira chamada. Objetivo CriarAgendamento registra a intenção incompleta
+antes de consultar o catálogo; a primeira Tool escolhida não define o objetivo.
+Na execução MAF, Tools usam Auto e retornam resultados ao agente em sequência.
+O modelo escolhe o ato de diálogo final (coletar, explicar catálogo/pedido,
+resultado ou esclarecer), que o backend compõe com fatos verificados. Prosa livre
+ou plano inválido não atestam escrita. Não há classificador por palavras exatas.
 
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
@@ -466,8 +470,10 @@ pode ser corrigido por outra Tool no mesmo turno.
 Localização ambígua pode manter a intenção LocalizarCliente, que apenas resolve
 identidade e não cadastra ou agenda. Candidatos de cliente/agendamento exigem
 texto cliente <ID> ou agendamento <ID> (ou ID isolado se houver um único conjunto).
-O modelo não escolhe candidatos. O contexto é retomado após reinício e a última
-resposta persistida do backend pode acompanhar o prompt como dado.
+O modelo não escolhe candidatos. O contexto é retomado após reinício com intenção
+em texto, campos/candidatos, última resposta e até três pares de mensagens e
+respostas recentes da inbox/diário do mesmo ator (500/1000 caracteres por par).
+Esse histórico é dado, nunca instrução, e não é registrado nos logs.
 
 Cancelamento apenas prepara um desafio da #22. O handler reconhece o texto
 exato confirmar <código do desafio>, relê a confirmação persistida e constrói
@@ -476,8 +482,8 @@ aceitam uma nova confirmação. A #22 revalida ator, alvo, argumentos, versão,
 expiração e consumo dentro da transação da mutação. /descartar abandona somente
 a intenção, sem cancelar um agendamento.
 
-O texto final do modelo não comprova escrita. A resposta é produzida a partir
-dos resultados do backend: mutação confirmada tem prioridade, assim como
+O texto final do modelo não comprova escrita. O ato de diálogo selecionado pelo
+modelo usa os resultados/contexto do backend: mutação confirmada tem prioridade, assim como
 perguntas, ambiguidades e recusas de negócio sobre consultas intercaladas.
 Erros sanitizados não viram sucesso. No máximo uma tentativa de escrita é
 executada por update; chamadas subsequentes não podem executar outra mutação.
@@ -488,6 +494,11 @@ IDs e padrões continuam nos dados estruturados das Tools; IDs são apresentados
 quando necessários à consulta/seleção explícita, sem usá-los em recibos de cadastro
 ou criação. Respostas iguais de updates diferentes não são deduplicadas por texto;
 reentregas do mesmo update continuam protegidas pelo diário/inbox existentes.
+Diagnóstico Information correlaciona update_id com recebimento, claim, contexto,
+interpretação, início/fim de Tool, escolha de resposta, persistência e envio.
+Registra somente etapas, contagens, nomes de Tools e resultados categóricos;
+não registra prompts, mensagens, argumentos, respostas ou dados pessoais.
+Procedimento real mínimo: [validacao-conversacional-controlada.md](validacao-conversacional-controlada.md).
 
 ## 7. Persistência
 

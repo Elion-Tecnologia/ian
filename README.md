@@ -263,6 +263,13 @@ original, inclusive após reinício. Telefone e horário divergente são esclare
 sem perder serviço, endereço ou data; o resumo amigável vem dos dados persistidos.
 As Tools mantêm seus metadados internos sem exibi-los como resultado técnico.
 
+A #98 interpreta o objetivo antes da seleção de Tools e usa atos de diálogo
+contextuais, com histórico recente persistente. Consultar o catálogo como etapa
+intermediária não encerra um pedido de agendar. Diagnóstico por update_id permite
+rastrear recebimento, modelo/Tools e envio sem registrar conteúdo privado.
+A [validação real controlada](docs/validacao-conversacional-controlada.md) exige
+autorização; testes simulados não comprovam a qualidade semântica do Gemini real.
+
 Mensagens sem texto, mídia com legenda, bots e grupos não executam comandos.
 O parser não persiste metadados de voz/áudio; contratos exclusivos de grupos
 permanecem fora do MVP.

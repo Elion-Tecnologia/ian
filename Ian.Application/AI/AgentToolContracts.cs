@@ -45,6 +45,7 @@ public sealed record AgentToolCaller(long UserId, long ChatId, bool IsPrivateCha
 [JsonDerivedType(typeof(LocalizarClienteToolRequest), "localizar")]
 [JsonDerivedType(typeof(ListarServicosToolRequest), "servicos")]
 [JsonDerivedType(typeof(EsclarecerPedidoToolRequest), "esclarecer")]
+[JsonDerivedType(typeof(InterpretarTurnoRequest), "interpretar")]
 [JsonDerivedType(typeof(ConsultarAgendaToolRequest), "consultar")]
 [JsonDerivedType(typeof(VerificarDisponibilidadeToolRequest), "disponibilidade")]
 [JsonDerivedType(typeof(CriarAgendamentoToolRequest), "criar")]

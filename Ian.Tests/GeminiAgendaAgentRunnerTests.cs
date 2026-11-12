@@ -14,7 +14,7 @@ public sealed class GeminiAgendaAgentRunnerTests
         var client = new RepeatingClient("listar_servicos");
         var backend = new Backend();
         var result = await Runner(client, backend).RunAsync("Liste os serviços.", Caller());
-        Assert.InRange(client.Calls, 1, AgentExecutionLimits.MaxTurns + 1);
+        Assert.InRange(client.Calls, 1, AgentExecutionLimits.MaxTurns + 2);
         Assert.InRange(backend.Calls, 1, AgentExecutionLimits.MaxToolCalls);
         Assert.False(result.IsSuccess); // The looping fake never returns final text.
     }
@@ -56,7 +56,7 @@ public sealed class GeminiAgendaAgentRunnerTests
         public int Calls { get; private set; }
         public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken = default)
         {
-            Calls++;
+            if (request is not InterpretarTurnoRequest) Calls++;
             return Task.FromResult(AgentToolResult.Succeeded("Serviços sintéticos."));
         }
     }
@@ -67,6 +67,8 @@ public sealed class GeminiAgendaAgentRunnerTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             Calls++;
+            if (options?.ToolMode == ChatToolMode.None)
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, """{"objetivo":"Consulta","resposta":"Resultado"}""")));
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
                 [new FunctionCallContent(Calls.ToString(), name, new Dictionary<string, object?>())])) { FinishReason = ChatFinishReason.ToolCalls });
         }

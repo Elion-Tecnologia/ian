@@ -21,6 +21,7 @@ public sealed class AgentTurnContext
     public AgentToolResult? LastResult { get; set; }
     public AgentToolResult? MutationResult { get; set; }
     public AgentToolResult? ClarificationResult { get; set; }
+    public AgentToolResult? CatalogResult { get; set; }
     public void Start(long updateId, AgentToolCaller caller, string text)
     {
         UpdateId = updateId;
@@ -32,6 +33,7 @@ public sealed class AgentTurnContext
         LastResult = null;
         MutationResult = null;
         ClarificationResult = null;
+        CatalogResult = null;
     }
 }
 
@@ -43,6 +45,7 @@ public interface IAgentTurnStore
     Task<long?> GetCommittedAppointmentAsync(long updateId, CancellationToken cancellationToken);
     Task<StoredConfirmation?> GetConfirmationAsync(long userId, long pendingId, CancellationToken cancellationToken);
     Task<string?> GetPreviousResponseAsync(long userId, long updateId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<AgentConversationTurn>> GetHistoryAsync(long userId, long updateId, CancellationToken cancellationToken);
     Task CompletePendingAsync(long userId, CancellationToken cancellationToken);
     Task SaveResponseAsync(long updateId, string response, CancellationToken cancellationToken);
     Task<bool> BeginSendAsync(long updateId, CancellationToken cancellationToken);

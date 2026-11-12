@@ -60,7 +60,7 @@ public sealed partial class TelegramAgentPostgresTests
         await f.HandleAgainAsync(1);
         Assert.Single(f.Transport.Replies);
         Assert.Single(await db.Agendamentos.ToListAsync());
-        Assert.Equal(2, f.Model.Calls);
+        Assert.Equal(3, f.Model.Calls);
     }
 
     [PostgresFact]
@@ -375,7 +375,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("criar_agendamento", Criar());
         await f.SendAsync(1, "Marque montagem por sete dias.");
         Assert.Contains("criado", Assert.Single(f.Transport.Replies));
-        Assert.Equal(2, f.Model.Calls);
+        Assert.Equal(3, f.Model.Calls);
         Assert.Contains(f.Model.ToolNames, names => names.Contains("criar_agendamento") && names.Contains("listar_servicos"));
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Single(await db.Agendamentos.ToListAsync());
@@ -518,9 +518,10 @@ public sealed partial class TelegramAgentPostgresTests
                 services.RemoveAll<IAgendaAgentRunner>();
                 services.RemoveAll<GeminiChatClientFactory>();
                 services.AddSingleton<GeminiChatClientFactory>(sp => new GeminiChatClientFactory(sp.GetRequiredService<IOptions<GeminiOptions>>(),
-                    new HttpClient(new GeminiHttp(Model))));
+                    new HttpClient(Faults.GeminiTransport?.Invoke() ?? new GeminiHttp(Model))));
                 services.AddScoped<IAgendaAgentRunner>(sp => new GeminiAgendaAgentRunner(sp.GetRequiredService<IOptions<GeminiOptions>>(),
-                    () => Faults.UseSdk ? sp.GetRequiredService<GeminiChatClientFactory>().GetClient() : Model, sp.GetRequiredService<IAgentToolRegistry>()));
+                    () => Faults.UseSdk ? sp.GetRequiredService<GeminiChatClientFactory>().GetClient() : Model, sp.GetRequiredService<IAgentToolRegistry>(),
+                    sp.GetRequiredService<AgentTurnContext>(), sp.GetRequiredService<ILogger<GeminiAgendaAgentRunner>>()));
                 services.RemoveAll<ITelegramTextSender>();
                 services.AddSingleton<ITelegramTextSender>(sp => new TelegramTextClient(new HttpClient(new TelegramHttp(Transport)),
                     sp.GetRequiredService<IOptions<TelegramOptions>>(), sp.GetRequiredService<IOptions<TelegramTextSendingOptions>>(),
@@ -589,6 +590,12 @@ public sealed partial class TelegramAgentPostgresTests
         public List<string[]> ToolNames { get; } = [];
         public List<string> ToolModes { get; } = [];
         public List<JsonElement> FunctionResults { get; } = [];
+        private ChatResponse Interpretation()
+        {
+            var name = _responses.TryPeek(out var next) ? next.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().FirstOrDefault()?.Name : null;
+            var goal = name == "criar_agendamento" ? DialogueGoal.CriarAgendamento : DialogueGoal.Consulta;
+            return new(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(new AgentDialoguePlan(goal, DialogueReply.Resultado), AgentRequestJson.Options)));
+        }
         public void Tool(string name, object arguments, bool final = true)
         {
             var element = JsonSerializer.SerializeToElement(arguments);
@@ -609,12 +616,12 @@ public sealed partial class TelegramAgentPostgresTests
             using var document = JsonDocument.Parse(body);
             Calls++;
             Prompts.Add(body);
-            ToolModes.Add(document.RootElement.TryGetProperty("toolConfig", out var toolConfig)
+            ToolModes.Add(!document.RootElement.TryGetProperty("tools", out _) ? "NONE" : document.RootElement.TryGetProperty("toolConfig", out var toolConfig)
                 ? toolConfig.GetProperty("functionCallingConfig").GetProperty("mode").GetString() ?? "" : "AUTO");
             if (document.RootElement.TryGetProperty("tools", out var tools))
                 ToolNames.Add(tools.EnumerateArray().SelectMany(t => t.GetProperty("functionDeclarations").EnumerateArray())
                     .Select(t => t.GetProperty("name").GetString() ?? "").ToArray());
-            var response = Next();
+            var response = document.RootElement.TryGetProperty("tools", out _) ? Next() : Interpretation();
             var parts = response.Messages.SelectMany(m => m.Contents).Select(content => content is FunctionCallContent call
                 ? (object)new { functionCall = new { name = call.Name, args = call.Arguments } }
                 : new { text = ((TextContent)content).Text }).ToArray();
@@ -628,12 +635,12 @@ public sealed partial class TelegramAgentPostgresTests
             cancellationToken.ThrowIfCancellationRequested();
             Calls++;
             Prompts.Add(string.Join("\n", messages.Where(m => m.Role == ChatRole.User).Select(m => m.Text)));
-            ToolModes.Add(options?.ToolMode == ChatToolMode.RequireAny ? "ANY" : "AUTO");
+            ToolModes.Add(options?.ToolMode == ChatToolMode.None ? "NONE" : options?.ToolMode == ChatToolMode.RequireAny ? "ANY" : "AUTO");
             ToolNames.Add(options?.Tools?.Select(t => t.Name).ToArray() ?? []);
             FunctionResults.AddRange(messages.SelectMany(m => m.Contents).OfType<FunctionResultContent>()
                 .Select(c => JsonSerializer.SerializeToElement(c.Result, AgentRequestJson.Options)));
             if (Failure is not null) throw Failure;
-            return Task.FromResult(Next());
+            return Task.FromResult(options?.ToolMode == ChatToolMode.None ? Interpretation() : Next());
         }
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -675,6 +682,7 @@ public sealed partial class TelegramAgentPostgresTests
     }
     private sealed class Faults
     {
+        public Func<HttpMessageHandler>? GeminiTransport { get; set; }
         public bool UseSdk { get; set; }
         public bool FailResponse { get; set; }
         public bool FailCompletion { get; set; }
@@ -685,6 +693,7 @@ public sealed partial class TelegramAgentPostgresTests
     }
     private sealed class FaultingTurns(IAgentTurnStore inner, Faults faults) : IAgentTurnStore
     {
+        public Task<IReadOnlyList<AgentConversationTurn>> GetHistoryAsync(long userId, long updateId, CancellationToken ct) => inner.GetHistoryAsync(userId, updateId, ct);
         public Task<IAsyncDisposable> LockAsync(long userId, CancellationToken ct) => inner.LockAsync(userId, ct);
         public Task<TelegramAgentTurn> GetOrCreateAsync(long updateId, long userId, CancellationToken ct) => inner.GetOrCreateAsync(updateId, userId, ct);
         public Task<bool> FreezeCommandAsync(long updateId, string json, CancellationToken ct) => inner.FreezeCommandAsync(updateId, json, ct);
