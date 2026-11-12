@@ -344,7 +344,10 @@ webhook/inbox → handler → MAF/Gemini → Tools → Application → PostgreSQ
 resposta privada. `DeferredTelegramHandlers` não é mais o handler registrado.
 Registros antigos pausados com HandlerUnavailable continuam preservados e
 exigem reativação controlada; a #44 não os reativa automaticamente.
-A homologação com serviços reais continua na #59.
+A #59 homologa o fluxo textual com PostgreSQL descartável e Telegram/Gemini
+simulados. Os passos locais e o checklist estão em
+[homologacao-local.md](homologacao-local.md); serviços reais exigem autorização
+explícita, sem implantação nesta etapa.
 
 ### 5.5 Respostas textuais privadas
 

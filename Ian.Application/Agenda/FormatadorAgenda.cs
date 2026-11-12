@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Ian.Domain.Entities;
 
 namespace Ian.Application.Agenda;
 
@@ -66,7 +67,9 @@ public static class FormatadorAgenda
                 .Append(linha.Agendamento.ClienteNome)
                 .Append(" [#")
                 .Append(linha.Agendamento.Id.ToString(CultureInfo.InvariantCulture))
-                .Append(']');
+                .Append("] | ")
+                .Append(linha.Agendamento.Estado == EstadoAgendamento.Concluido
+                    ? "Concluído" : linha.Agendamento.Estado.ToString());
         }
 
         return texto.ToString();
