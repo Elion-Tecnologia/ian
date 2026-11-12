@@ -30,6 +30,9 @@ automática. Consultas sob demanda e respostas textuais normais permanecem.
 
 ## Executando o projeto localmente
 
+Para banco descartável, homologação automatizada do fluxo textual e checklist
+local de API/túnel/webhook, siga [Homologação local do MVP](docs/homologacao-local.md).
+
 ### Pré-requisitos
 
 - .NET SDK 10
@@ -247,9 +250,12 @@ início do envio é tratada como incerta, sem reenvio automático.
 
 Limites: 6 iterações MAF, 8 Tools, 15s por Tool, 60s por execução, prompt de
 16.000 caracteres e resposta privada de até 4.000. Chamadas reais Gemini exigem
-autorização para quota/cobrança; testes usam integrações simuladas. Homologação
-com Telegram/Gemini reais permanece na #59. Updates antigos pausados com
+autorização para quota/cobrança; testes usam integrações simuladas. A #59 homologa
+o MVP com PostgreSQL descartável e Telegram/Gemini simulados; execução com serviços
+reais exige autorização explícita. Updates antigos pausados com
 HandlerUnavailable exigem reativação controlada; não foram reativados pela #44.
+Consultas textuais exibem o estado de cada compromisso, distinguindo histórico
+Concluído/Cancelado de reservas Agendadas.
 
 Mensagens sem texto, mídia com legenda, bots e grupos não executam comandos.
 O parser não persiste metadados de voz/áudio; contratos exclusivos de grupos

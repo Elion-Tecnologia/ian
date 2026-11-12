@@ -91,6 +91,10 @@ A #44 integra o handler Telegram autorizado, MAF/Gemini, sete Tools e os casos
 de uso; o modelo nunca fornece ator, update_id ou aceite de confirmação.
 Seleção exige texto com ID; cancelamento exige confirmar <código> fora do modelo.
 PersistirTurnosAgente adiciona diário por update para recuperação e estado de
-resposta/envio. Essa migration foi exercitada apenas em ian_t44_tests; aplicação
-em outro ambiente continua exigindo autorização específica. Envios incertos não
-são reenviados automaticamente. Homologação com serviços reais pertence à #59.
+resposta/envio. Essa migration foi exercitada somente em bancos descartáveis
+(ian_t44_tests e ian_t59_tests); aplicação em banco não descartável continua
+exigindo autorização específica. Envios incertos não
+são reenviados automaticamente. A #59 homologa o MVP textual com PostgreSQL
+descartável e Telegram/Gemini simulados, conforme docs/homologacao-local.md.
+Chamadas reais e migrations em bancos não descartáveis exigem autorização
+explícita; homologação simulada não autoriza essas operações.

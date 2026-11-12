@@ -135,8 +135,8 @@ public sealed class ConsultaAgendaApplicationTests
 
         Assert.Equal(
             $"Agenda de 12/11/2026{novaLinha}{novaLinha}" +
-            $"08h–12h | Visita técnica — Maria [#1]{novaLinha}{novaLinha}" +
-            "14h–18h | Visita técnica — João [#2]",
+            $"08h–12h | Visita técnica — Maria [#1] | Agendado{novaLinha}{novaLinha}" +
+            "14h–18h | Visita técnica — João [#2] | Agendado",
             texto);
     }
 

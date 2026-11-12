@@ -20,13 +20,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Ian.Tests;
 
 [Collection("Telegram Inbox PostgreSQL")]
-public sealed class TelegramAgentPostgresTests
+[Trait("Category", "HomologacaoMvp")]
+public sealed partial class TelegramAgentPostgresTests
 {
     [PostgresFact]
     public async Task WebhookMafToolsPostgresETelegramCriamUmaReservaSomenteAposCommit()
@@ -494,6 +495,8 @@ public sealed class TelegramAgentPostgresTests
         public ScriptedModel Model { get; } = new();
         public TelegramState Transport { get; } = new();
         public Faults Faults { get; } = new();
+        public AdjustableClock Clock { get; } = new();
+        public CapturedLogs Logs { get; } = new();
         private WebApplicationFactory<Program> _factory;
         public Fixture() => _factory = Factory();
         private WebApplicationFactory<Program> Factory() => new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
@@ -509,6 +512,9 @@ public sealed class TelegramAgentPostgresTests
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(Clock);
+                services.AddLogging(logging => logging.ClearProviders().AddProvider(Logs));
                 services.RemoveAll<IAgendaAgentRunner>();
                 services.RemoveAll<GeminiChatClientFactory>();
                 services.AddSingleton<GeminiChatClientFactory>(sp => new GeminiChatClientFactory(sp.GetRequiredService<IOptions<GeminiOptions>>(),
@@ -518,12 +524,16 @@ public sealed class TelegramAgentPostgresTests
                 services.RemoveAll<ITelegramTextSender>();
                 services.AddSingleton<ITelegramTextSender>(sp => new TelegramTextClient(new HttpClient(new TelegramHttp(Transport)),
                     sp.GetRequiredService<IOptions<TelegramOptions>>(), sp.GetRequiredService<IOptions<TelegramTextSendingOptions>>(),
-                    TimeProvider.System, NullLogger<TelegramTextClient>.Instance));
+                    Clock, sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TelegramTextClient>>()));
                 services.RemoveAll<IAgentTurnStore>();
                 services.AddScoped<IAgentTurnStore>(sp => new FaultingTurns(new PostgresAgentTurnStore(
                     sp.GetRequiredService<IanDbContext>(), sp.GetRequiredService<Npgsql.NpgsqlDataSource>()), Faults));
                 services.RemoveAll<IAgendaCriacaoStore>();
                 services.AddScoped<IAgendaCriacaoStore>(sp => new FaultingCreation(sp.GetRequiredService<IanDbContext>(), Faults));
+                services.RemoveAll<IAgendaEdicaoStore>();
+                services.AddScoped<IAgendaEdicaoStore>(sp => new FaultingEdit(sp.GetRequiredService<IanDbContext>(), Faults));
+                services.RemoveAll<IAgendaEncerramentoStore>();
+                services.AddScoped<IAgendaEncerramentoStore>(sp => new FaultingClose(sp.GetRequiredService<IanDbContext>(), Faults));
             });
         });
         public static async Task<Fixture> CreateAsync()
@@ -662,6 +672,9 @@ public sealed class TelegramAgentPostgresTests
         public bool FailResponse { get; set; }
         public bool FailCompletion { get; set; }
         public bool FailCreation { get; set; }
+        public bool FailEdit { get; set; }
+        public bool FailClose { get; set; }
+        public bool FailAfterBeginSend { get; set; }
     }
     private sealed class FaultingTurns(IAgentTurnStore inner, Faults faults) : IAgentTurnStore
     {
@@ -681,7 +694,16 @@ public sealed class TelegramAgentPostgresTests
             if (faults.FailResponse) { faults.FailResponse = false; throw new InvalidOperationException("synthetic response failure"); }
             return inner.SaveResponseAsync(updateId, response, ct);
         }
-        public Task<bool> BeginSendAsync(long updateId, CancellationToken ct) => inner.BeginSendAsync(updateId, ct);
+        public async Task<bool> BeginSendAsync(long updateId, CancellationToken ct)
+        {
+            var started = await inner.BeginSendAsync(updateId, ct);
+            if (started && faults.FailAfterBeginSend)
+            {
+                faults.FailAfterBeginSend = false;
+                throw new InvalidOperationException("synthetic failure after marking send");
+            }
+            return started;
+        }
         public Task FinishSendAsync(long updateId, string state, long? messageId, string status, CancellationToken ct) => inner.FinishSendAsync(updateId, state, messageId, status, ct);
     }
     private sealed class FaultingCreation(IanDbContext db, Faults faults) : IAgendaCriacaoStore
