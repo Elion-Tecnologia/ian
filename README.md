@@ -257,6 +257,12 @@ HandlerUnavailable exigem reativação controlada; não foram reativados pela #4
 Consultas textuais exibem o estado de cada compromisso, distinguindo histórico
 Concluído/Cancelado de reservas Agendadas.
 
+Pedidos como “Quero agendar um serviço” iniciam a coleta mesmo sem outros dados.
+Na #96, cadastro/localização de cliente durante essa coleta continuam o objetivo
+original, inclusive após reinício. Telefone e horário divergente são esclarecidos
+sem perder serviço, endereço ou data; o resumo amigável vem dos dados persistidos.
+As Tools mantêm seus metadados internos sem exibi-los como resultado técnico.
+
 Mensagens sem texto, mídia com legenda, bots e grupos não executam comandos.
 O parser não persiste metadados de voz/áudio; contratos exclusivos de grupos
 permanecem fora do MVP.

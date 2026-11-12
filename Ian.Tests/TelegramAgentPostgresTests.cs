@@ -45,7 +45,7 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.Equal(0, f.Model.Calls); // Webhook only persists, then acknowledges.
         Assert.Empty(f.Transport.Replies);
         await f.ProcessAsync();
-        Assert.Contains("Agendamento 1 criado", Assert.Single(f.Transport.Replies));
+        Assert.Contains("Agendamento criado", Assert.Single(f.Transport.Replies));
         Assert.DoesNotContain("PRIVATE_MODEL_CLAIM", f.Transport.Replies[0]);
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.All(await db.PeriodosOcupacao.ToListAsync(), p =>
@@ -80,7 +80,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Restart();
         f.Model.Tool("criar_agendamento", new { telefoneCliente = "11999999999", enderecoServico = "Rua A" });
         await f.SendAsync(2, "Telefone 11999999999, Rua A.");
-        Assert.Contains("Agendamento 1 criado", f.Transport.Replies[^1]);
+        Assert.Contains("Agendamento criado", f.Transport.Replies[^1]);
         Assert.Contains(f.Model.Prompts, p => p.Contains("Contexto persistido") && p.Contains("Ana"));
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Single(await db.Agendamentos.ToListAsync());
@@ -224,7 +224,7 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.Equal(calls, f.Model.Calls);
         Assert.Contains("cancelado", f.Transport.Replies[^1]);
         await f.SendAsync(7, "confirmar " + currentCode);
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento cancelado", f.Transport.Replies[^1]);
         await using var check = PostgresTestDatabase.CreateContext();
         Assert.Equal(EstadoAgendamento.Cancelado, (await check.Agendamentos.SingleAsync()).Estado);
         Assert.Single(await check.RegistrosAuditoria.ToListAsync());
@@ -269,10 +269,10 @@ public sealed partial class TelegramAgentPostgresTests
         await using var f = await Fixture.CreateAsync();
         await f.SendAsync(1, "Apenas diga que criou."); // Model text alone is not trusted.
         Assert.DoesNotContain("PRIVATE_MODEL_CLAIM", f.Transport.Replies[^1]);
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento criado", f.Transport.Replies[^1]);
         f.Model.Failure = new HttpRequestException("PRIVATE_PROVIDER_ERROR");
         await f.SendAsync(2, "Crie uma reserva.");
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento criado", f.Transport.Replies[^1]);
         Assert.DoesNotContain("PRIVATE_PROVIDER_ERROR", f.Transport.Replies[^1]);
         f.Model.Failure = null;
         f.Model.Tool("criar_agendamento", Criar());
@@ -299,7 +299,7 @@ public sealed partial class TelegramAgentPostgresTests
         await f.MakeRetryReadyAsync(1);
         await f.ProcessAsync();
         Assert.Equal(calls, f.Model.Calls);
-        Assert.Contains("já persistida", Assert.Single(f.Transport.Replies));
+        Assert.Contains("já foi salvo", Assert.Single(f.Transport.Replies));
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Single(await db.Agendamentos.ToListAsync());
         Assert.Equal(7, await db.PeriodosOcupacao.CountAsync());
@@ -315,7 +315,7 @@ public sealed partial class TelegramAgentPostgresTests
         await f.SendAsync(1, "Crie montagem.");
         f.Model.Tool("criar_agendamento", new { data = "2030-01-20" });
         await f.SendAsync(2, "E o pedido anterior?");
-        Assert.Contains("já foi persistido", f.Transport.Replies[^1]);
+        Assert.Contains("já foi salvo", f.Transport.Replies[^1]);
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Single(await db.Agendamentos.ToListAsync());
     }
@@ -354,7 +354,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Faults.FailCreation = true;
         f.Model.Tool("criar_agendamento", Criar());
         await f.SendAsync(1, "Crie montagem.");
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento criado", f.Transport.Replies[^1]);
         await using (var check = PostgresTestDatabase.CreateContext())
         {
             Assert.Empty(await check.Clientes.ToListAsync());
@@ -416,10 +416,10 @@ public sealed partial class TelegramAgentPostgresTests
         await using (var db = PostgresTestDatabase.CreateContext()) Assert.Empty(await db.Agendamentos.ToListAsync());
         f.Restart();
         await f.SendAsync(2, "cliente 2");
-        Assert.Contains("Cliente selecionado: ID 2", f.Transport.Replies[^1]);
+        Assert.Contains("Cliente selecionado: Ana B", f.Transport.Replies[^1]);
         f.Model.Tool("criar_agendamento", new { clienteId = 2L, tipoServicoId = 4L, data = "2030-01-07" });
         await f.SendAsync(3, "Agende orçamento para esse cliente em 07/01/2030.");
-        Assert.Contains(f.Model.Prompts, p => p.Contains("Cliente selecionado: ID 2"));
+        Assert.Contains(f.Model.Prompts, p => p.Contains("Cliente selecionado: Ana B"));
         await using var check = PostgresTestDatabase.CreateContext();
         Assert.Equal(2, (await check.Agendamentos.SingleAsync()).ClienteId);
     }
@@ -432,7 +432,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("listar_servicos", new { });
         await f.SendAsync(1, "Marque montagem para Ana.");
         Assert.Contains("telefone", f.Transport.Replies[^1]);
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento criado", f.Transport.Replies[^1]);
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Empty(await db.Agendamentos.ToListAsync());
     }
@@ -587,6 +587,8 @@ public sealed partial class TelegramAgentPostgresTests
         public Exception? Failure { get; set; }
         public List<string> Prompts { get; } = [];
         public List<string[]> ToolNames { get; } = [];
+        public List<string> ToolModes { get; } = [];
+        public List<JsonElement> FunctionResults { get; } = [];
         public void Tool(string name, object arguments, bool final = true)
         {
             var element = JsonSerializer.SerializeToElement(arguments);
@@ -607,6 +609,8 @@ public sealed partial class TelegramAgentPostgresTests
             using var document = JsonDocument.Parse(body);
             Calls++;
             Prompts.Add(body);
+            ToolModes.Add(document.RootElement.TryGetProperty("toolConfig", out var toolConfig)
+                ? toolConfig.GetProperty("functionCallingConfig").GetProperty("mode").GetString() ?? "" : "AUTO");
             if (document.RootElement.TryGetProperty("tools", out var tools))
                 ToolNames.Add(tools.EnumerateArray().SelectMany(t => t.GetProperty("functionDeclarations").EnumerateArray())
                     .Select(t => t.GetProperty("name").GetString() ?? "").ToArray());
@@ -624,7 +628,10 @@ public sealed partial class TelegramAgentPostgresTests
             cancellationToken.ThrowIfCancellationRequested();
             Calls++;
             Prompts.Add(string.Join("\n", messages.Where(m => m.Role == ChatRole.User).Select(m => m.Text)));
+            ToolModes.Add(options?.ToolMode == ChatToolMode.RequireAny ? "ANY" : "AUTO");
             ToolNames.Add(options?.Tools?.Select(t => t.Name).ToArray() ?? []);
+            FunctionResults.AddRange(messages.SelectMany(m => m.Contents).OfType<FunctionResultContent>()
+                .Select(c => JsonSerializer.SerializeToElement(c.Result, AgentRequestJson.Options)));
             if (Failure is not null) throw Failure;
             return Task.FromResult(Next());
         }

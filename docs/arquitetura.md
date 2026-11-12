@@ -427,7 +427,7 @@ O agente não deve:
 
 ### 6.3 Ferramentas do agente
 
-`IAgentToolRegistry` publica sete funções tipadas: cadastrar_cliente,
+`IAgentToolRegistry` publica as sete funções de negócio: cadastrar_cliente,
 localizar_cliente, listar_servicos, consultar_agenda, verificar_disponibilidade,
 criar_agendamento e alterar_agendamento. Esta última conecta editar, reagendar,
 concluir e preparar cancelamento às operações #33/#35. Cadastro/localização
@@ -435,6 +435,11 @@ reutiliza #25; catálogo #24; cálculo #30; criação transacional #31; consulta
 formatação #32. As unidades são Minutos/DiasCorridos e modalidades
 Interno/Externo/Remoto, alinhadas ao Domain. Os contratos anteriores Horas/NaLoja
 não correspondiam ao modelo implementado e foram substituídos.
+
+A regressão #96 acrescenta esclarecer_pedido, sem escrita, para saudações ou
+intenção desconhecida. A chamada inicial exige uma Tool (RequireAny); pedidos de
+agendar usam criar_agendamento com dados parciais, inclusive sem argumentos,
+persistindo a intenção desde o início. Não há classificação por palavras exatas.
 
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
@@ -453,6 +458,11 @@ Pedidos incompletos usam IPendingConversation (#21), persistindo o request
 normalizado, campos faltantes e candidatos. O campo interno request admite até
 8.000 caracteres; o limite total do contexto permanece 12.000. Uma consulta não
 descarta a pendência. Outro tipo de pedido é recusado até /descartar explícito.
+Durante uma criação pendente, dados de cadastrar_cliente/localizar_cliente
+alimentam o request original e continuam a criação. Cliente e agendamento novos
+continuam sendo gravados juntos pela #31, sem cadastro intermediário independente.
+Horário divergente em DiasCorridos é esclarecido junto com dados faltantes e não
+pode ser corrigido por outra Tool no mesmo turno.
 Localização ambígua pode manter a intenção LocalizarCliente, que apenas resolve
 identidade e não cadastra ou agenda. Candidatos de cliente/agendamento exigem
 texto cliente <ID> ou agendamento <ID> (ou ID isolado se houver um único conjunto).
@@ -472,6 +482,12 @@ perguntas, ambiguidades e recusas de negócio sobre consultas intercaladas.
 Erros sanitizados não viram sucesso. No máximo uma tentativa de escrita é
 executada por update; chamadas subsequentes não podem executar outra mutação.
 Todos os dados de agendamento continuam sujeitos aos casos de uso e lock da #79.
+Respostas em português não expõem os códigos de resultado. Resumos de sucesso
+releem os dados persistidos (cliente, serviço, datas, duração, horários e endereço).
+IDs e padrões continuam nos dados estruturados das Tools; IDs são apresentados
+quando necessários à consulta/seleção explícita, sem usá-los em recibos de cadastro
+ou criação. Respostas iguais de updates diferentes não são deduplicadas por texto;
+reentregas do mesmo update continuam protegidas pelo diário/inbox existentes.
 
 ## 7. Persistência
 

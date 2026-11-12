@@ -35,6 +35,7 @@ public sealed class GeminiAgendaAgentRunner(
                     ModelId = options.Value.Model,
                     Instructions = AgentToolPolicy.SystemInstructions + " Use as Tools mesmo com argumentos parciais para persistir o pedido. Leia o contexto pendente e envie somente os novos dados coletados. Use listar_servicos para obter IDs e padrões. Nunca escolha entre candidatos, aceite confirmação ou substitua uma intenção pendente por conta própria. Datas relativas usam o dia e fuso informados pelo host. Não invente telefone, endereço, data nem horário. No máximo uma operação de escrita por update.",
                     Tools = registry.CreateTools(caller).Cast<AITool>().ToList(),
+                    ToolMode = ChatToolMode.RequireAny,
                     MaxOutputTokens = 2048,
                     AllowMultipleToolCalls = false
                 }

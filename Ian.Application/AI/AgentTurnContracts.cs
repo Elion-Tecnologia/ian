@@ -20,6 +20,7 @@ public sealed class AgentTurnContext
     public AgentToolResult? PendingResult { get; set; }
     public AgentToolResult? LastResult { get; set; }
     public AgentToolResult? MutationResult { get; set; }
+    public AgentToolResult? ClarificationResult { get; set; }
     public void Start(long updateId, AgentToolCaller caller, string text)
     {
         UpdateId = updateId;
@@ -30,6 +31,7 @@ public sealed class AgentTurnContext
         PendingResult = null;
         LastResult = null;
         MutationResult = null;
+        ClarificationResult = null;
     }
 }
 
