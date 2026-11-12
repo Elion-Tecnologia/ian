@@ -87,7 +87,8 @@ public sealed class PostgresConsultaAgendaStore(IanDbContext context) : IConsult
                 agendamento.UnidadeDuracao,
                 agendamento.EnderecoSnapshot,
                 agendamento.Observacoes,
-                agendamento.Estado))
+                agendamento.Estado,
+                agendamento.Versao))
             .ToListAsync(cancellationToken);
 
         var periodosQuery = context.PeriodosOcupacao
@@ -130,7 +131,8 @@ public sealed class PostgresConsultaAgendaStore(IanDbContext context) : IConsult
                     .ToArray(),
                 item.EnderecoServico,
                 item.Observacoes,
-                item.Estado);
+                item.Estado,
+                item.Versao);
         }).ToArray();
     }
 
@@ -180,7 +182,8 @@ public sealed class PostgresConsultaAgendaStore(IanDbContext context) : IConsult
         UnidadeDuracao UnidadeDuracao,
         string? EnderecoServico,
         string? Observacoes,
-        EstadoAgendamento Estado);
+        EstadoAgendamento Estado,
+        long Versao);
 
     private sealed record PeriodoComAgendamento(
         long AgendamentoId,

@@ -129,7 +129,8 @@ public sealed class ConsultaAgendaApplication(IConsultaAgendaStore store) : ICon
             registro.Periodos.Select(ConverterPeriodo).ToArray(),
             registro.EnderecoServico,
             registro.Observacoes,
-            registro.Estado);
+            registro.Estado,
+            registro.Versao);
 
     private static ResultadoConsultaAgendamentos Invalido(ErroConsultaAgenda erro) =>
         new(

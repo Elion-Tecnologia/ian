@@ -30,7 +30,7 @@ public sealed class CriacaoAgendamentoMigrationTests
                 (31001, 'synthetic:before-31', '2030-01-01 12:01Z');
             """);
 
-        await db.Database.MigrateAsync();
+        await db.GetService<IMigrator>().MigrateAsync("20261111194044_VincularOperacaoAoAgendamento");
 
         Assert.Equal(8, (await db.Database.GetAppliedMigrationsAsync()).Count());
         var operation = await db.TelegramBusinessOperations.AsNoTracking().SingleAsync();

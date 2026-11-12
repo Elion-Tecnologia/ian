@@ -495,7 +495,8 @@ atualizada → validações/mutações/auditoria → commit. Rollback limpa o ra
 O lock tem timeout de 5 segundos; não há retry automático de escrita.
 
 Versão obsoleta e indisponibilidade do lock são falhas tipadas e sanitizadas.
-O callback futuro deve comparar a versão esperada, revalidar confirmação e conflitos,
+A edição da #33 compara a versão esperada e revalida conflitos; os callbacks de
+operações sensíveis devem também revalidar a confirmação
 e incrementar Versao também quando apenas ocupações mudarem. O token EF detecta
 UPDATE com versão original obsoleta; não implementa confirmação conversacional.
 
@@ -511,9 +512,34 @@ todos os dias em America/Sao_Paulo e geração de janelas em minutos/dias corrid
 As verificações da migration apenas recusam legado incompatível, sem recalcular ocupações.
 A #31 implementa criação com disponibilidade, transação, lock e idempotência.
 A #32 implementa consultas 0/1/N, filtros combinados, disponibilidade e
-formatação textual sem efeitos de escrita. Os casos de uso #33/#35 e as tools
-ainda precisam integrar edições, estados, autorização conversacional e
-confirmações.
+formatação textual sem efeitos de escrita. A #33 implementa `IEdicaoAgendamento`:
+releitura sob lock, versão esperada obrigatória, apenas Agendado, cálculo #30,
+conflitos excluindo o próprio ID e substituição atômica dos períodos. Identidade,
+cliente e estado são preservados; tipo, duração/unidade, modalidade, início,
+endereço e observações podem ser editados sem alterar o catálogo. Incrementa
+Versao e registra auditoria mínima transacional (ID, operação, update e versão),
+sem dados pessoais nem histórico detalhado da #42 retirada. Rollback preserva
+os valores e períodos anteriores; erros de banco/cancelamento são propagados.
+
+`EditarAgendamentoSolicitacao` usa null para preservar campos. EnderecoServico e
+Observacoes não nulos substituem os valores; AlterarEndereco/AlterarObservacoes
+permitem limpá-los explicitamente. Endereço externo vazio é recusado. Nunca se
+reconsulta o endereço do cliente para atualizar o snapshot. Data/horário omitidos
+preservam o início local atual; converter para DiasCorridos com início diferente
+de 08h exige esclarecimento, inclusive quando esse horário vem do compromisso.
+Reentrega de `agendamento:edit` retorna o ID original sem executar a edição nem
+atribuir uma versão atual ao resultado antigo.
+
+Consultas agora expõem Versao para submissão da edição. A preparação de seleção
+`SelecaoEdicaoAgendamentoApplication.BuscarAsync` reutiliza #32: zero não altera
+nada, um devolve ID/versão, vários persistem até 20 candidatos via #21, sem escolher
+automaticamente. `MaisResultados` exige refinar filtros para alcançar outros IDs.
+Use `IPendingConversation.SelectCandidateAsync` com campo `Agendamento` para a
+escolha explícita (a #21 persiste `AgendamentoId` nos campos coletados); releia
+o alvo selecionado para obter a versão antes de editar.
+Uma intenção já pendente não é substituída. A seleção e a edição são casos de uso
+internos: autorização de comandos privados e integração das Tools continuam na
+#44; alterações de estado/confirmações pertencem à #35.
 ## 8. Idempotência e recuperação
 
 O recebimento utiliza `update_id` para identificar
