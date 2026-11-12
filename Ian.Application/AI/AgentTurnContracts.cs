@@ -48,8 +48,6 @@ public interface IAgentTurnStore
     Task<IReadOnlyList<AgentConversationTurn>> GetHistoryAsync(long userId, long updateId, CancellationToken cancellationToken);
     Task CompletePendingAsync(long userId, CancellationToken cancellationToken);
     Task SaveResponseAsync(long updateId, string response, CancellationToken cancellationToken);
-    Task<bool> BeginSendAsync(long updateId, CancellationToken cancellationToken);
-    Task FinishSendAsync(long updateId, string state, long? messageId, string status, CancellationToken cancellationToken);
 }
 
 public static class AgentRequestJson

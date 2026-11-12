@@ -357,7 +357,8 @@ public sealed partial class TelegramAgentPostgresTests
 
     private sealed class AdjustableClock : TimeProvider
     {
-        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        // PostgreSQL stores microseconds; Linux UtcNow can include a remaining 100ns tick.
+        private DateTimeOffset _now = new(DateTimeOffset.UtcNow.Ticks / 10 * 10, TimeSpan.Zero);
         public override DateTimeOffset GetUtcNow() => _now;
         public void Set(DateTimeOffset now) => _now = now;
         public void Advance(TimeSpan interval) => _now += interval;

@@ -15,7 +15,7 @@ public sealed partial class AgendaTelegramHandler(
     IAgendaAgentRunner agent,
     IPendingConversation conversations,
     IAgentTurnStore turns,
-    ITelegramTextSender sender,
+    TelegramReplyOutboxConsumer delivery,
     TimeProvider clock,
     ILogger<AgendaTelegramHandler>? logger = null) : ITelegramAuthorizedUpdateHandler
 {
@@ -45,18 +45,11 @@ public sealed partial class AgendaTelegramHandler(
             await turns.SaveResponseAsync(update.UpdateId, response, cancellationToken);
             logger?.LogInformation("Update {UpdateId} stage=response_saved outcome={Outcome}.", update.UpdateId, result?.Outcome);
         }
-        if (!await turns.BeginSendAsync(update.UpdateId, cancellationToken))
+        if (!await delivery.ProcessNextAsync(cancellationToken, update.UpdateId))
         {
-            logger?.LogInformation("Update {UpdateId} stage=send_skipped reason=already_started_or_attempts_exhausted.", update.UpdateId);
+            logger?.LogInformation("Update {UpdateId} stage=send_skipped reason=queued_backoff_or_terminal.", update.UpdateId);
             return;
         }
-        logger?.LogInformation("Update {UpdateId} stage=send_started.", update.UpdateId);
-        var sent = await sender.SendAsync(update, response, cancellationToken);
-        var state = sent.IsAccepted ? "Accepted" : sent.DeliveryUncertain ? "Uncertain" : "Failed";
-        await turns.FinishSendAsync(update.UpdateId, state, sent.MessageId, sent.Status.ToString(), cancellationToken);
-        logger?.LogInformation("Update {UpdateId} stage=send_finished state={State} outcome={Outcome}.", update.UpdateId, state, sent.Status);
-        if (!sent.DeliveryUncertain && (sent.Status is TelegramTextSendStatus.RateLimited or TelegramTextSendStatus.ServerFailure))
-            throw new TelegramReplyNotAcceptedException();
     }
 
     private async Task<AgentToolResult?> ProcessTextAsync(string text, AgentToolCaller caller, CancellationToken ct)
@@ -119,5 +112,3 @@ public sealed partial class AgendaTelegramHandler(
     [GeneratedRegex(@"^(?:(cliente|agendamento)\s+)?#?(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SelectText();
 }
-
-public sealed class TelegramReplyNotAcceptedException() : Exception("A resposta Telegram ainda não foi aceita.");

@@ -199,6 +199,8 @@ Identificadores retirados não serão reutilizados para funcionalidades diferent
 - RN-037: período ausente em consulta de programação deve ser esclarecido.
 - RN-046: registrar tentativas e aceitação pela API Telegram; aceitação não
   comprova leitura. Resultado incerto não deve virar sucesso ou retry cego.
+  A #51 persiste despachos por chave lógica de update/ator, com orçamento,
+  backoff e retry_after. Retomada de envio não repete a operação de negócio.
 - Respostas às solicitações da administradora são enviadas normalmente no
   privado; sua persistência e recuperação não dependem de job automático.
 
@@ -229,7 +231,7 @@ como requisito ativo.
 | Equipe / ExcecaoExpediente | Fora do modelo ativo; preservar dados legados | Fora do EF ativo; registros, IDs, FKs e sequences preservados em legado_mvp. |
 | SolicitacaoPendente | Estado mínimo durável e versão da operação | Persistência da intenção, campos coletados/faltantes, candidatos, expiração, cancelamento e retomada; diálogo integrado na #44, incluindo localização ambígua, coleta incremental e retomada após reinício. |
 | RegistroAuditoria / EnvioTelegram | Preservar histórico e saída privada | Auditoria mínima transacional de edição na #33 e encerramento na #35; auditoria detalhada fora do escopo. |
-| TelegramUpdateInbox / TelegramBusinessOperation / TelegramAgentTurn | Preservar controles técnicos | Recebimento, recuperação, executor idempotente e diário de comando/resposta/envio da #44 implementados. |
+| TelegramUpdateInbox / TelegramBusinessOperation / TelegramAgentTurn / TelegramReplyAttempt | Preservar controles técnicos | Recebimento, recuperação, executor idempotente e diário da #44; outbox e resultados mínimos de envio na #51, sem auditoria geral. |
 
 Agendamento implementado: `Id: long`, `ClienteId: long`, `TipoServicoId: long`,
 `Modalidade: ModalidadeServico`, `Duracao: int > 0`,

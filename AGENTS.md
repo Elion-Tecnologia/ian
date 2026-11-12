@@ -110,3 +110,10 @@ Histórico recente da inbox/diário e intenção persistente acompanham cada tur
 Logs por update_id registram somente etapas/resultados, nunca conteúdo privado.
 Simulação de protocolo/orquestração não comprova a qualidade semântica do Gemini
 real. Seguir docs/validacao-conversacional-controlada.md somente após autorização.
+
+A #51 usa telegram_agent_turns como outbox e telegram_reply_attempts para
+resultados mínimos de envio, sem reimplementar a #42. Chave por update/ator,
+até três despachos, backoff e retry_after persistidos; Sending vencido vira
+Uncertain, nunca reenvio automático. Completed da inbox não comprova entrega.
+PersistirRetentativasRespostas foi validada somente em ian_t51_tests descartável;
+aplicação em banco existente continua exigindo autorização específica.

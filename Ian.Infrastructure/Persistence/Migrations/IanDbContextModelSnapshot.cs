@@ -323,12 +323,23 @@ namespace Ian.Infrastructure.Persistence.Migrations
                     b.Property<string>("CommandJson")
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("LogicalReplyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("NextSendAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("ResponseText")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
                     b.Property<int>("SendAttempts")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("SendLeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SendState")
                         .IsRequired()
@@ -339,6 +350,9 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<Guid?>("SendToken")
+                        .HasColumnType("uuid");
+
                     b.Property<long?>("TelegramMessageId")
                         .HasColumnType("bigint");
 
@@ -346,6 +360,12 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint");
 
                     b.HasKey("UpdateId");
+
+                    b.HasIndex("LogicalReplyKey")
+                        .IsUnique();
+
+                    b.HasIndex("NextSendAttemptAtUtc")
+                        .HasFilter("\"NextSendAttemptAtUtc\" IS NOT NULL");
 
                     b.ToTable("telegram_agent_turns", null, t =>
                         {
@@ -375,6 +395,52 @@ namespace Ian.Infrastructure.Persistence.Migrations
                     b.HasIndex("AgendamentoId");
 
                     b.ToTable("telegram_business_operations", (string)null);
+                });
+
+            modelBuilder.Entity("Ian.Domain.Entities.TelegramReplyAttempt", b =>
+                {
+                    b.Property<long>("UpdateId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("DeliveryUncertain")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("RetryAfterSeconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long?>("TelegramMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("Token")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("TransportAttempts")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UpdateId", "Number");
+
+                    b.ToTable("telegram_reply_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_reply_attempt_number", "\"Number\" BETWEEN 1 AND 3");
+
+                            t.HasCheckConstraint("ck_reply_transport_attempts", "\"TransportAttempts\" BETWEEN 0 AND 3");
+                        });
                 });
 
             modelBuilder.Entity("Ian.Domain.Entities.TelegramUpdateInbox", b =>
@@ -565,6 +631,15 @@ namespace Ian.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Ian.Domain.Entities.TelegramUpdateInbox", null)
+                        .WithMany()
+                        .HasForeignKey("UpdateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Ian.Domain.Entities.TelegramReplyAttempt", b =>
+                {
+                    b.HasOne("Ian.Domain.Entities.TelegramAgentTurn", null)
                         .WithMany()
                         .HasForeignKey("UpdateId")
                         .OnDelete(DeleteBehavior.Restrict)

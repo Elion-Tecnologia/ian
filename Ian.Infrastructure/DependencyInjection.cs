@@ -47,6 +47,8 @@ public static class DependencyInjection
         services.AddScoped<AgendaAgentApplication>();
         services.AddScoped<IAgentToolBackend>(provider => provider.GetRequiredService<AgendaAgentApplication>());
         services.AddScoped<IAgentTurnStore, PostgresAgentTurnStore>();
+        services.AddScoped<ITelegramReplyOutbox, PostgresTelegramReplyOutbox>();
+        services.AddScoped<TelegramReplyOutboxConsumer>();
         services.AddScoped<IAgendaAgentRunner>(provider => new GeminiAgendaAgentRunner(
             provider.GetRequiredService<IOptions<GeminiOptions>>(),
             provider.GetRequiredService<GeminiChatClientFactory>().GetClient,
