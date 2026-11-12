@@ -78,7 +78,7 @@ public sealed partial class TelegramAgentPostgresTests
         await using var check = PostgresTestDatabase.CreateContext();
         Assert.Single(await check.TelegramBusinessOperations.ToListAsync());
         Assert.Equal(7, await check.PeriodosOcupacao.CountAsync());
-        AssertStage(f, 4, "webhook_persisted_or_duplicate", "inbox_claimed", "context_loaded", "model_interpreted", "tool_completed", "response_saved", "send_started", "send_finished", "inbox_completed", "send_skipped");
+        AssertStage(f, 4, "webhook_persisted_or_duplicate", "inbox_claimed", "pending_progress", "pending_data_captured", "response_saved", "send_started", "send_finished", "inbox_completed", "send_skipped");
         var logs = string.Join("\n", f.Logs.Messages);
         foreach (var value in new[] { "Queria agendar", "Rua Fict", "11999999999", "synthetic-token", "synthetic-key", "synthetic-secret" })
             Assert.DoesNotContain(value, logs);
@@ -147,7 +147,8 @@ public sealed partial class TelegramAgentPostgresTests
         await f.SendAsync(3, "O telefone é 11999999999.");
         f.Faults.FailCreation = rollback;
         model.Failure = "after_tool";
-        await f.SendAsync(4, "Pode começar às 08h.");
+        // Keep unparsed content so this case still exercises a provider failure after a Tool.
+        await f.SendAsync(4, "Pode começar às 08h, com os dados que já informei.");
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Equal(rollback ? 0 : 1, await db.Agendamentos.CountAsync());
         Assert.Equal(rollback ? 0 : 1, await db.Clientes.CountAsync());

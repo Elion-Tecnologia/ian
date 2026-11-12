@@ -478,6 +478,35 @@ explicação contextual exige catálogo previamente exibido ou solicitação exp
 Saudação com InvalidResponse usa fallback social sem alterar a intenção pendente.
 Logs distinguem captura aceita/rejeitada e próximo campo, nunca seus valores.
 
+A #107 estende a captura para múltiplos campos explícitos no mesmo input, inclusive
+em intenção pendente: nome, telefone normalizado, data e horário. Datas relativas
+usam America/Sao_Paulo. Hipóteses, alternativas e consultas não preenchem o pedido.
+O backend persiste os dados reconhecidos antes da interpretação; se sobrar conteúdo
+não capturado, ele segue no ciclo existente do modelo, sem chamada adicional.
+Saudações e esclarecimentos podem terminar sem Tools e mantêm a intenção.
+
+Nomes de serviços são comparados aos nomes do catálogo consultado no backend,
+ignorando caixa e acentos, sem aliases ou IDs presumidos. Um nome inequívoco
+prevalece sobre argumentos omitidos ou incorretos do modelo; vários candidatos
+exigem seleção textual `serviço <ID>`, persistida pelo mecanismo existente. Somente
+os candidatos são apresentados; o catálogo completo continua sob solicitação.
+O merge conserva identidade, telefone, serviço, data e horário já coletados contra
+reformulações incidentais. Troca de identidade exige texto explícito; dados
+omitidos/vazios não apagam os valores anteriores. Criação incompleta e início
+divergente em DiasCorridos continuam impedidos pelos casos de uso existentes.
+
+Reconhecimentos de data/horário são frases produzidas com dados persistidos pelo
+backend e transportadas em `ConfirmedAcknowledgements`/`RequiredFacts` no resultado
+interno das Tools. O compositor permite somente essas frases factuais exatas;
+outros números, datas ou alegações de sucesso continuam sujeitos ao fallback.
+Recibos de criação/cancelamento, disponibilidade e conflitos seguem protegidos.
+Eventos `pending_progress`, `service_resolution` e `field_merge` registram por
+update_id apenas campos presentes/faltantes, fases, categorias e estados. A função
+de diagnóstico no contexto do turno não recebe valores privados nem prompts.
+A sequência real de 12/11/2026 e falhas simuladas são exercitadas em testes;
+esses testes não comprovam a semântica do Gemini real nem a causa de suas chamadas
+históricas. Não há migration, endpoint ou contrato HTTP novo na #107.
+
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
 8 chamadas de Tools, 15 segundos por Tool e 60 segundos por execução. Prompts

@@ -33,8 +33,8 @@ public sealed class AgendaAgentApplication(
             var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken);
             if (pending is null && interpretation.Plan.Objetivo == DialogueGoal.CriarAgendamento)
             {
-                var initial = PendingTurnDataCapture.InitialSchedule(turn.Text, clock.GetUtcNow());
-                turn.PendingResult = await PrepararAsync(initial, cancellationToken);
+                var initial = PendingTurnDataCapture.Extract(turn.Text, clock.GetUtcNow()).Request;
+                turn.PendingResult = await PrepararAsync(initial, cancellationToken, somentePerguntar: true);
                 pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken);
             }
             if (pending?.Intent == PendingIntent.CriarAgendamento && interpretation.Plan.Objetivo == DialogueGoal.CriarAgendamento &&
@@ -50,6 +50,14 @@ public sealed class AgendaAgentApplication(
             return clarification;
         if (turn.WriteAttempted && request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest)
             return AgentToolResult.Failed("Já tentei executar este pedido. Consulte a agenda antes de tentar novamente.");
+        if (request is CadastrarClienteToolRequest or LocalizarClienteToolRequest or CriarAgendamentoToolRequest &&
+            PendingTurnDataCapture.IsNonCollectionInput(turn.Text) &&
+            await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken) is { Intent: PendingIntent.CriarAgendamento } active &&
+            active.CollectedFields.GetValueOrDefault("request") is { } collected)
+        {
+            turn.ReportProgress?.Invoke(new("field_merge", "NonCollectionPreserved"));
+            return turn.PendingResult = await PrepararAsync(AgentRequestJson.Deserialize(collected), cancellationToken, somentePerguntar: true);
+        }
         if (request is CadastrarClienteToolRequest or LocalizarClienteToolRequest &&
             (await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken))?.Intent == PendingIntent.CriarAgendamento)
         {
@@ -100,6 +108,8 @@ public sealed class AgendaAgentApplication(
             return AgentToolResult.Succeeded($"Cliente selecionado: {c.Nome}, telefone {c.TelefoneNormalizado}.", c);
         }
         var node = JsonNode.Parse(json)?.AsObject() ?? throw new InvalidOperationException("Solicitação ausente.");
+        if (node["tipoServicoId"] is null && pending.CollectedFields.TryGetValue("servicoId", out var serviceId) && long.TryParse(serviceId, out var selectedService))
+            node["tipoServicoId"] = selectedService;
         foreach (var field in new[] { "clienteId", "agendamentoId" })
             if (pending.CollectedFields.TryGetValue(field, out var value) && long.TryParse(value, out var id)) node[field] = id;
         return await PrepararAsync(AgentRequestJson.Deserialize(node.ToJsonString()), cancellationToken);
@@ -109,8 +119,32 @@ public sealed class AgendaAgentApplication(
     {
         var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
         if (pending is null) return null;
-        if (PendingTurnDataCapture.Capture(turn.Text, pending) is { } request)
-            return await ExecuteAsync(request, ct);
+        if (pending.Intent != PendingIntent.CriarAgendamento || pending.CandidateIds.Count > 0) return null;
+        var stored = pending.CollectedFields.GetValueOrDefault("request") is { } json
+            ? AgentRequestJson.Deserialize(json) as CriarAgendamentoToolRequest : null;
+        var input = PendingTurnDataCapture.Extract(turn.Text, clock.GetUtcNow(),
+            pending.MissingFields.FirstOrDefault()?.StartsWith("nome", StringComparison.OrdinalIgnoreCase) == true ||
+            stored?.NomeCliente is { } name && PendingTurnDataCapture.Normalize(name) == PendingTurnDataCapture.Normalize(turn.Text));
+        var service = ScheduleServiceResolution.Resolve(input.RemainingText, await catalogo.ListarAsync(ct));
+        turn.ReportProgress?.Invoke(new("service_resolution", service.Category));
+        if (service.Category == "Ambiguous") return await PrepararAsync(input.Request, ct, somentePerguntar: true);
+        if (input.HasFields || service.Category == "Unique")
+        {
+            var request = input.Request with { TipoServicoId = service.Matches.SingleOrDefault()?.Id };
+            var completeReply = PendingTurnDataCapture.IsCollectionRemainder(service.RemainingText);
+            try
+            {
+                var result = turn.PendingResult = await PrepararAsync(request, ct, somentePerguntar: !completeReply);
+                return completeReply ? result : null;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                turn.ReportProgress?.Invoke(new("capture_failed", ex.GetType().Name));
+                return AgentToolResult.Failed("Não foi possível concluir a operação.",
+                    ex is OperationCanceledException ? AgentFailureCategory.ToolTimeout : AgentFailureCategory.ToolFailure);
+            }
+        }
         if (PendingTurnDataCapture.IsInvalidPhoneReply(turn.Text, pending))
             return AgentToolResult.Missing("Esse telefone não parece válido. Pode informar um telefone brasileiro com DDD?") with
                 { DialogueMode = AgentDialogueMode.Collection, QuestionTopic = "telefone", FailureCategory = AgentFailureCategory.InvalidArguments };
@@ -119,7 +153,7 @@ public sealed class AgendaAgentApplication(
 
     private long UserId => turn.Caller?.UserId ?? throw new InvalidOperationException("Turno não autorizado.");
 
-    private async Task<AgentToolResult> PrepararAsync(AgentToolRequest request, CancellationToken ct)
+    private async Task<AgentToolResult> PrepararAsync(AgentToolRequest request, CancellationToken ct, bool somentePerguntar = false)
     {
         var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
         if (pending?.CollectedFields.GetValueOrDefault("executionUpdateId") is { } previousUpdate &&
@@ -139,18 +173,54 @@ public sealed class AgendaAgentApplication(
         };
         if (pending is not null && pending.Intent != intent)
             return AgentToolResult.ConflictResult("Há outro pedido pendente. Para descartá-lo explicitamente envie /descartar e então faça o novo pedido.");
+        if (request is CriarAgendamentoToolRequest creation)
+        {
+            var input = PendingTurnDataCapture.Extract(turn.Text, clock.GetUtcNow(),
+                pending?.MissingFields.FirstOrDefault()?.StartsWith("nome", StringComparison.OrdinalIgnoreCase) == true);
+            var service = ScheduleServiceResolution.Resolve(input.RemainingText, await catalogo.ListarAsync(ct));
+            creation = creation with { NomeCliente = input.Request.NomeCliente ?? creation.NomeCliente,
+                TelefoneCliente = input.Request.TelefoneCliente ?? creation.TelefoneCliente,
+                Data = input.Request.Data ?? creation.Data, Horario = input.Request.Horario ?? creation.Horario,
+                TipoServicoId = service.Category == "Unique" ? service.Matches[0].Id : creation.TipoServicoId };
+            request = creation;
+        }
         if (pending?.CollectedFields.GetValueOrDefault("request") is { } old)
         {
             var merged = JsonNode.Parse(old)?.AsObject() ?? throw new InvalidOperationException();
             var incoming = JsonNode.Parse(AgentRequestJson.Serialize(request))?.AsObject() ?? throw new InvalidOperationException();
             foreach (var pair in incoming.ToArray())
                 if (pair.Value is JsonValue value && value.TryGetValue<string>(out var text) && string.IsNullOrWhiteSpace(text)) incoming[pair.Key] = null;
-            if (request is CriarAgendamentoToolRequest && incoming["clienteId"] is null)
+            if (request is CriarAgendamentoToolRequest)
             {
-                var nameChanged = incoming["nomeCliente"] is { } name && !JsonNode.DeepEquals(name, merged["nomeCliente"]);
-                var phoneChanged = incoming["telefoneCliente"] is { } phone && !JsonNode.DeepEquals(phone, merged["telefoneCliente"]);
-                if (nameChanged || phoneChanged) merged["clienteId"] = null;
-                if (nameChanged && incoming["telefoneCliente"] is null) merged["telefoneCliente"] = null;
+                var explicitIdentityChange = PendingTurnDataCapture.IsExplicitIdentityChange(turn.Text);
+                foreach (var field in new[] { "nomeCliente", "telefoneCliente", "clienteId", "tipoServicoId", "data", "horario" })
+                {
+                    if (merged[field] is null || incoming[field] is null || JsonNode.DeepEquals(merged[field], incoming[field])) continue;
+                    var input = PendingTurnDataCapture.Extract(turn.Text, clock.GetUtcNow());
+                    var valueIsExplicit = field switch
+                    {
+                        "nomeCliente" or "telefoneCliente" => explicitIdentityChange &&
+                            PendingTurnDataCapture.Normalize(turn.Text).Contains(PendingTurnDataCapture.Normalize(incoming[field]!.GetValue<string>()), StringComparison.Ordinal),
+                        "clienteId" => Regex.IsMatch(turn.Text.Trim(), @"^cliente\s+\d+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+                        "data" => input.Request.Data == ((CriarAgendamentoToolRequest)request).Data,
+                        "horario" => input.Request.Horario == ((CriarAgendamentoToolRequest)request).Horario,
+                        "tipoServicoId" => ScheduleServiceResolution.Resolve(turn.Text, await catalogo.ListarAsync(ct)).Matches.Any(t => t.Id == ((CriarAgendamentoToolRequest)request).TipoServicoId)
+                            || Regex.IsMatch(turn.Text.Trim(), @"^servi[cç]o\s+\d+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+                        _ => false
+                    };
+                    if (!valueIsExplicit)
+                    {
+                        incoming[field] = null;
+                        turn.ReportProgress?.Invoke(new("field_merge", "Preserved", [field]));
+                    }
+                }
+                if (explicitIdentityChange && incoming["nomeCliente"] is { } name && !JsonNode.DeepEquals(name, merged["nomeCliente"]))
+                {
+                    merged["clienteId"] = null;
+                    if (incoming["telefoneCliente"] is null) merged["telefoneCliente"] = null;
+                }
+                else if (explicitIdentityChange && incoming["telefoneCliente"] is { } phone && !JsonNode.DeepEquals(phone, merged["telefoneCliente"]))
+                    merged["clienteId"] = null;
             }
             foreach (var pair in incoming)
                 if (pair.Value is not null) merged[pair.Key] = pair.Value.DeepClone();
@@ -162,10 +232,22 @@ public sealed class AgendaAgentApplication(
             if (start.Status != PendingIntentStartStatus.Started)
                 return AgentToolResult.ConflictResult("Não foi possível iniciar o pedido. Retome ou descarte o pedido pendente.");
         }
+        if (request is CriarAgendamentoToolRequest schedule)
+        {
+            var service = ScheduleServiceResolution.Resolve(turn.Text, await catalogo.ListarAsync(ct));
+            if (service.Category == "Ambiguous")
+            {
+                await PrepararCriacaoAsync(schedule with { TipoServicoId = null }, ct, somentePerguntar: true);
+                var current = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
+                await conversations.UpdateAsync(UserId, current!.CollectedFields, ["servicoId"],
+                    new Dictionary<string, IReadOnlyList<long>> { ["servico"] = service.Matches.Select(t => t.Id).ToArray() }, clock.GetUtcNow(), ct);
+                return AgentToolResult.Ambiguity("Selecione o serviço: " + string.Join("; ", service.Matches.Select(t => $"{t.Id}: {t.Nome}")) + ". Envie serviço <ID>.");
+            }
+        }
         return request switch
         {
             CadastrarClienteToolRequest r => await PrepararCadastroAsync(r, ct),
-            CriarAgendamentoToolRequest r => await PrepararCriacaoAsync(r, ct),
+            CriarAgendamentoToolRequest r => await PrepararCriacaoAsync(r, ct, somentePerguntar),
             AlterarAgendamentoToolRequest r => await PrepararAlteracaoAsync(r, ct),
             _ => AgentToolResult.Failed("Pedido inválido.")
         };
@@ -241,13 +323,20 @@ public sealed class AgendaAgentApplication(
             clarification = $"Você pediu início às {r.Horario:HH:mm}. Serviços em dias corridos reservam 08h–18h em cada data, inclusive a primeira. " +
                 (campos.Length == 0 ? "Podemos iniciar às 08h?" : "Precisaremos esclarecer o início às 08h antes de agendar.");
         if (clarification.Length > 0) mensagem = (mensagem + " " + clarification).Trim();
-        var result = AgentToolResult.Missing(mensagem) with
+        var acknowledgements = new List<string>();
+        var captured = PendingTurnDataCapture.Extract(turn.Text, clock.GetUtcNow());
+        if (captured.Request.Data == r.Data && r.Data is { } date)
+            acknowledgements.Add($"Recebi a data: {date.ToString("dddd, dd/MM/yyyy", CultureInfo.GetCultureInfo("pt-BR"))}.");
+        if (captured.Request.Horario == r.Horario && r.Horario is { } time)
+            acknowledgements.Add($"Recebi o horário de início: {time:HH:mm}.");
+        var result = AgentToolResult.Missing(string.Join(" ", acknowledgements.Append(mensagem))) with
         {
             DialogueMode = campos.Length > 0 ? AgentDialogueMode.Collection : AgentDialogueMode.Protected,
             QuestionTopic = campos.Length > 0 ? Topic(campos[0]) : null,
-            RequiredFacts = string.IsNullOrWhiteSpace(clarification) ? null : clarification
+            RequiredFacts = string.Join(" ", acknowledgements.Append(clarification).Where(f => !string.IsNullOrWhiteSpace(f))),
+            ConfirmedAcknowledgements = acknowledgements
         };
-        if (horarioDivergente) turn.ClarificationResult = result;
+        if (horarioDivergente && !somentePerguntar) turn.ClarificationResult = result;
         return result;
     }
 
@@ -304,6 +393,7 @@ public sealed class AgendaAgentApplication(
     private async Task SavePendingAsync(AgentToolRequest request, IReadOnlyList<string> missing,
         IReadOnlyDictionary<string, IReadOnlyList<long>>? candidates, CancellationToken ct)
     {
+        var before = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
         var fields = new Dictionary<string, string> { ["request"] = AgentRequestJson.Serialize(request) };
         if (request is AlterarAgendamentoToolRequest r)
         {
@@ -312,6 +402,10 @@ public sealed class AgendaAgentApplication(
         }
         var result = await conversations.UpdateAsync(UserId, fields, missing.Select(field => new string(field.Where(char.IsAsciiLetterOrDigit).ToArray())).ToArray(), candidates, clock.GetUtcNow(), ct);
         if (result != PendingIntentUpdateStatus.Updated) throw new InvalidOperationException("Não foi possível persistir os dados pendentes.");
+        var present = JsonNode.Parse(fields["request"])!.AsObject().Where(p => p.Key != "$type" && p.Value is not null).Select(p => p.Key);
+        turn.ReportProgress?.Invoke(new("pending_progress", before?.Intent.ToString() ?? "None", present.ToArray(),
+            before?.MissingFields ?? [], missing.Select(Topic).ToArray(), result.ToString()));
+
     }
 
     private async Task<AgentToolResult> PersistirAsync(AgentToolRequest request, CancellationToken ct)

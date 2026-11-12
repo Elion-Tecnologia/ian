@@ -614,8 +614,11 @@ public sealed partial class TelegramAgentPostgresTests
         public List<string[]> ToolNames { get; } = [];
         public List<string> ToolModes { get; } = [];
         public List<JsonElement> FunctionResults { get; } = [];
+        public AgentDialoguePlan? InterpretationOverride { get; set; }
         private ChatResponse Interpretation()
         {
+            if (InterpretationOverride is { } plan)
+                return new(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(plan, AgentRequestJson.Options)));
             var name = _responses.TryPeek(out var next) ? next.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().FirstOrDefault()?.Name : null;
             var goal = name == "criar_agendamento" ? DialogueGoal.CriarAgendamento : DialogueGoal.Consulta;
             return new(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(new AgentDialoguePlan(goal, DialogueReply.Resultado), AgentRequestJson.Options)));

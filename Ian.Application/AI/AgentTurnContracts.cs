@@ -15,6 +15,7 @@ public sealed class AgentTurnContext
     public long UpdateId { get; private set; } = -1;
     public AgentToolCaller? Caller { get; private set; }
     public string Text { get; private set; } = "";
+    public Action<AgentProgress>? ReportProgress { get; set; }
     public bool CatalogWasShown { get; set; }
     public bool SelectionRequired { get; set; }
     public bool WriteAttempted { get; set; }
@@ -59,3 +60,7 @@ public static class AgentRequestJson
     public static AgentToolRequest Deserialize(string json) => JsonSerializer.Deserialize<AgentToolRequest>(json, Options)
         ?? throw new JsonException("Solicitação inválida.");
 }
+
+// Only field names, categories and states cross this diagnostic boundary.
+public sealed record AgentProgress(string Phase, string Category, IReadOnlyList<string>? Fields = null,
+    IReadOnlyList<string>? MissingBefore = null, IReadOnlyList<string>? MissingAfter = null, string? State = null);

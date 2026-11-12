@@ -45,6 +45,24 @@ public sealed class AgentResponseComposerTests
         Assert.Same(trusted, AgentResponseComposer.Compose(trusted, draft, true));
     }
 
+    [Theory]
+    [InlineData("Recebi a data: segunda-feira, 16/11/2026. Qual é o telefone com DDD?", true)]
+    [InlineData("Recebi a data: terça-feira, 17/11/2026. Qual é o telefone com DDD?", false)]
+    [InlineData("Recebi a data: segunda-feira, 16/11/2026. Agendamento confirmado. Qual é o telefone?", false)]
+    [InlineData("Recebi a data: segunda-feira, 16/11/2026. Está livre às 9h. Qual é o telefone?", false)]
+    public void ReconheceSomenteFatosDeColetaConfirmadosPeloBackend(string draft, bool accepted)
+    {
+        const string fact = "Recebi a data: segunda-feira, 16/11/2026.";
+        var trusted = AgentToolResult.Missing("Qual é o telefone com DDD?") with
+        {
+            DialogueMode = AgentDialogueMode.Collection, QuestionTopic = "telefone",
+            RequiredFacts = fact, ConfirmedAcknowledgements = [fact]
+        };
+        var result = AgentResponseComposer.Compose(trusted, draft, true);
+        Assert.Equal(accepted, !ReferenceEquals(trusted, result));
+        if (accepted) Assert.Equal(1, result.Message.Split(fact).Length - 1);
+    }
+
     [Fact]
     public void EsclarecimentoPreservaFatosObrigatoriosSemRestringirTextoLiteral()
     {

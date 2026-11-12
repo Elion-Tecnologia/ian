@@ -33,6 +33,10 @@ public sealed partial class AgendaTelegramHandler(
         await using var userLock = await turns.LockAsync(admin, cancellationToken);
         var journal = await turns.GetOrCreateAsync(update.UpdateId, admin, cancellationToken);
         context.Start(update.UpdateId, caller, text);
+        context.ReportProgress = progress => logger?.LogInformation(
+            "Update {UpdateId} stage={Stage} category={Category} fields_present={FieldsPresent} missing_before={MissingBefore} missing_after={MissingAfter} state={State}.",
+            context.UpdateId, progress.Phase, progress.Category, string.Join(",", progress.Fields ?? []),
+            string.Join(",", progress.MissingBefore ?? []), string.Join(",", progress.MissingAfter ?? []), progress.State);
         logger?.LogInformation("Update {UpdateId} stage=handler_started response_cached={Cached} send_state={State}.", update.UpdateId, journal.ResponseText is not null, journal.SendState);
         var response = journal.ResponseText;
         if (response is null)
@@ -73,7 +77,7 @@ public sealed partial class AgendaTelegramHandler(
         var selection = SelectText().Match(text.Trim());
         if (selection.Success && pending?.CandidateIds.Count > 0)
         {
-            var field = selection.Groups[1].Value.ToLowerInvariant();
+            var field = PendingTurnDataCapture.Normalize(selection.Groups[1].Value);
             if (field.Length == 0 && pending.CandidateIds.Count == 1) field = pending.CandidateIds.Keys.Single();
             if (!long.TryParse(selection.Groups[2].Value, out var id) ||
                 await conversations.SelectCandidateAsync(caller.UserId, field, id, clock.GetUtcNow(), ct) != PendingIntentUpdateStatus.Updated)
@@ -93,6 +97,7 @@ public sealed partial class AgendaTelegramHandler(
             pending = await conversations.GetForTurnAsync(caller.UserId, clock.GetUtcNow(), ct);
             logger?.LogInformation("Update {UpdateId} stage=intent_recovered category=ExplicitScheduling.", context.UpdateId);
         }
+        pending = await conversations.GetForTurnAsync(caller.UserId, clock.GetUtcNow(), ct);
         var local = TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"));
         var previous = await turns.GetPreviousResponseAsync(caller.UserId, context.UpdateId, ct);
         context.CatalogWasShown = previous?.Contains("Serviços:", StringComparison.Ordinal) == true;
@@ -163,6 +168,6 @@ public sealed partial class AgendaTelegramHandler(
     private static partial Regex SchedulingText();
     [GeneratedRegex(@"^confirmar\s+([a-fA-F0-9-]{32,36})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ConfirmText();
-    [GeneratedRegex(@"^(?:(cliente|agendamento)\s+)?#?(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(?:(cliente|agendamento|serviço|servico)\s+)?#?(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SelectText();
 }

@@ -21,7 +21,8 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("criar_agendamento", new { nomeCliente = "Ana", tipoServicoId = 4L, data = "2030-01-07" },
             texto: "Pode me passar o telefone do cliente com DDD?");
         await f.SendAsync(2, "Quero um orçamento para Ana em 07/01/2030.");
-        Assert.Equal("Pode me passar o telefone do cliente com DDD?", f.Transport.Replies[^1]);
+        Assert.Contains("Pode me passar o telefone do cliente com DDD?", f.Transport.Replies[^1]);
+        Assert.Contains("Recebi a data: segunda-feira, 07/01/2030.", f.Transport.Replies[^1]);
         Assert.Single(f.Transport.Replies[^1], c => c == '?');
         Assert.DoesNotContain("nome", f.Transport.Replies[^1]);
         if (sdk) Assert.Contains(f.Model.Prompts, p => p.Contains("questionTopic"));
