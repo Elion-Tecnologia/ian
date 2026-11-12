@@ -13,14 +13,14 @@ public sealed partial class TelegramAgentPostgresTests
     [InlineData("Queria agendar um serviço")]
     [InlineData("Gostaria de marcar uma montagem")]
     [InlineData("Preciso reservar um serviço")]
-    public async Task InterpretacaoIndependenteDaPrimeiraToolMantemObjetivoEExplicaCatalogoAposReinicio(string pedido)
+    public async Task InterpretacaoIndependenteDaPrimeiraToolMantemObjetivoEExplicaColetaAposReinicio(string pedido)
     {
         await using var f = await Fixture.CreateAsync();
         var model = UseConversationSimulation(f);
         await f.SendAsync(1, pedido);
         var first = f.Transport.Replies[^1];
         Assert.Contains("nome do cliente", first);
-        Assert.Contains("Serviços:", first);
+        Assert.DoesNotContain("Serviços:", first);
         Assert.Equal(new[] { "listar_servicos" }, model.ExecutedTools); // Intentionally the same intermediate choice that escaped #96.
         await using (var db = PostgresTestDatabase.CreateContext())
         {
@@ -30,9 +30,9 @@ public sealed partial class TelegramAgentPostgresTests
         f.Restart();
         await f.SendAsync(2, "O que é isto?");
         var explanation = f.Transport.Replies[^1];
-        Assert.Contains("lista de serviços", explanation);
-        Assert.Contains("durações", explanation);
-        Assert.Contains("Montagem", explanation);
+        Assert.Contains("próximo dado", explanation);
+        Assert.DoesNotContain("Serviços:", explanation);
+        Assert.DoesNotContain("Montagem", explanation);
         Assert.Contains("nome do cliente", explanation);
         Assert.DoesNotContain("Como posso ajudar", explanation);
         Assert.True(model.RecoveredHistory);
@@ -165,7 +165,8 @@ public sealed partial class TelegramAgentPostgresTests
         model.ClarificationTool = true;
         await f.SendAsync(2, "O que é isto?");
         Assert.Contains("esclarecer_pedido", model.ExecutedTools);
-        Assert.Contains("lista de serviços", f.Transport.Replies[^1]);
+        Assert.Contains("próximo dado", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Serviços:", f.Transport.Replies[^1]);
         Assert.Contains("nome do cliente", f.Transport.Replies[^1]);
         Assert.DoesNotContain("Como posso ajudar", f.Transport.Replies[^1]);
         await using var db = PostgresTestDatabase.CreateContext();
@@ -223,7 +224,7 @@ public sealed partial class TelegramAgentPostgresTests
                 var reply = text.Contains("isto") ? "ExplicarCatalogo" : text.Contains("Consulte") ? "Resultado" : "Coletar";
                 if (text.Contains("isto"))
                 {
-                    state.RecoveredHistory = prompt.Contains("Histórico recente") && prompt.Contains("Serviços:") && prompt.Contains("CriarAgendamento");
+                    state.RecoveredHistory = prompt.Contains("Histórico recente") && prompt.Contains("nome do cliente") && prompt.Contains("CriarAgendamento");
                     Assert.True(state.RecoveredHistory);
                 }
                 return Plan(goal, reply);

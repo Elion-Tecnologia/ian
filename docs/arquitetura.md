@@ -466,6 +466,18 @@ telemetria do provedor. “Hoje” é resolvido pelo relógio do backend no fuso
 São Paulo; o marcador persistido de restante do dia exige horário e duração
 explícitos, preservando regras e padrões dos demais pedidos.
 
+A #105 acrescenta captura tipada pelo próximo campo persistido de
+CriarAgendamento. Nome direto e telefone válido podem avançar sem Gemini;
+mensagens sociais, comandos, consultas e candidatos não são tratados como nome.
+O merge e a revalidação usam o backend existente, sob lock por usuário e journal
+do update; campos omitidos/vazios não apagam valores anteriores. O pedido inicial
+preserva datas explícitas, hoje/amanhã/dia da semana e horário inequívoco no fuso
+de São Paulo. Ambiguidades continuam para esclarecimento, sem presumir serviço.
+O catálogo consultado internamente pelas Tools não é automaticamente publicado;
+explicação contextual exige catálogo previamente exibido ou solicitação explícita.
+Saudação com InvalidResponse usa fallback social sem alterar a intenção pendente.
+Logs distinguem captura aceita/rejeitada e próximo campo, nunca seus valores.
+
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
 8 chamadas de Tools, 15 segundos por Tool e 60 segundos por execução. Prompts

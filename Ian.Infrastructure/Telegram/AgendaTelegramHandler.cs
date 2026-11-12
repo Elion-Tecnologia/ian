@@ -80,8 +80,22 @@ public sealed partial class AgendaTelegramHandler(
                 return AgentToolResult.ConflictResult("ID fora dos candidatos apresentados. Selecione explicitamente um dos IDs.");
             return await backend.RetomarSelecaoAsync(ct);
         }
+        if (await backend.CapturePendingReplyAsync(ct) is { } captured)
+        {
+            logger?.LogInformation("Update {UpdateId} stage={Stage} outcome={Outcome} field={Field} next_topic={NextTopic}.",
+                context.UpdateId, captured.FailureCategory == AgentFailureCategory.InvalidArguments ? "pending_data_rejected" : "pending_data_captured",
+                captured.Outcome, pending?.MissingFields.FirstOrDefault(), captured.QuestionTopic);
+            return captured;
+        }
+        if (pending is null && SchedulingText().IsMatch(text))
+        {
+            await backend.ExecuteAsync(new InterpretarTurnoRequest(new(DialogueGoal.CriarAgendamento, DialogueReply.Coletar)), ct);
+            pending = await conversations.GetForTurnAsync(caller.UserId, clock.GetUtcNow(), ct);
+            logger?.LogInformation("Update {UpdateId} stage=intent_recovered category=ExplicitScheduling.", context.UpdateId);
+        }
         var local = TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"));
         var previous = await turns.GetPreviousResponseAsync(caller.UserId, context.UpdateId, ct);
+        context.CatalogWasShown = previous?.Contains("Serviços:", StringComparison.Ordinal) == true;
         var history = await turns.GetHistoryAsync(caller.UserId, context.UpdateId, ct);
         logger?.LogInformation("Update {UpdateId} stage=context_loaded pending={Pending} history_count={Count}.", context.UpdateId, pending is not null, history.Count);
         var prompt = $"Data operacional: {local:yyyy-MM-dd HH:mm}, America/Sao_Paulo.\n" +
@@ -112,6 +126,11 @@ public sealed partial class AgendaTelegramHandler(
             logger?.LogInformation("Update {UpdateId} stage=response_composed mode={Mode} source={Source} category={Category} outcome={Outcome}.",
                 context.UpdateId, trusted.DialogueMode, source, compositionCategory, composed.Outcome);
             return composed;
+        }
+        if (run.Failure == AiModelFailure.InvalidResponse && context.MutationResult is null && PendingTurnDataCapture.IsSimpleGreeting(text))
+        {
+            logger?.LogWarning("Update {UpdateId} stage=response_fallback category=SocialInvalidResponse.", context.UpdateId);
+            return AgentToolResult.Missing("Oi! Estou por aqui. Como posso ajudar?") with { DialogueMode = AgentDialogueMode.Social };
         }
         // A provider/wording failure is not evidence that a committed operation failed.
         var safe = context.MutationResult ?? context.PendingResult ?? context.LastResult;

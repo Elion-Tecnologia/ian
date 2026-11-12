@@ -15,6 +15,7 @@ public sealed class AgentTurnContext
     public long UpdateId { get; private set; } = -1;
     public AgentToolCaller? Caller { get; private set; }
     public string Text { get; private set; } = "";
+    public bool CatalogWasShown { get; set; }
     public bool SelectionRequired { get; set; }
     public bool WriteAttempted { get; set; }
     public AgentToolResult? PendingResult { get; set; }
@@ -27,6 +28,7 @@ public sealed class AgentTurnContext
         UpdateId = updateId;
         Caller = caller;
         Text = text;
+        CatalogWasShown = false;
         SelectionRequired = false;
         WriteAttempted = false;
         PendingResult = null;
