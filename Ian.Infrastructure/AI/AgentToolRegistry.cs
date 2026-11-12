@@ -10,14 +10,22 @@ namespace Ian.Infrastructure.AI;
 public interface IAgentToolRegistry
 {
     IReadOnlyList<AIFunction> CreateTools(AgentToolCaller caller);
+    Task BeginTurnAsync(AgentDialoguePlan plan, AgentToolCaller caller, CancellationToken ct);
 }
 
 public sealed class AgentToolRegistry(
     IAgentToolBackend backend,
     IOptions<TelegramOptions> telegram,
     AgentExecutionBudget budget,
-    AgentTurnContext? turn = null) : IAgentToolRegistry
+    AgentTurnContext? turn = null,
+    Microsoft.Extensions.Logging.ILogger<AgentToolRegistry>? logger = null) : IAgentToolRegistry
 {
+    public async Task BeginTurnAsync(AgentDialoguePlan plan, AgentToolCaller caller, CancellationToken ct)
+    {
+        if (!Ian.Application.Conversation.OperationConfirmationPolicy.IsAuthorized(caller, telegram.Value.AdministratorUserId))
+            throw new InvalidOperationException("Solicitação não autorizada.");
+        await backend.ExecuteAsync(new InterpretarTurnoRequest(plan), ct);
+    }
     public IReadOnlyList<AIFunction> CreateTools(AgentToolCaller caller)
     {
         ArgumentNullException.ThrowIfNull(caller);
@@ -50,8 +58,12 @@ public sealed class AgentToolRegistry(
 
     private async Task<AgentToolResult> InvokeAsync(AgentToolRequest request, AgentToolCaller caller, CancellationToken cancellationToken)
     {
+        if (logger is not null) Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(logger,
+            "Update {UpdateId} stage=tool_started tool={Tool}.", turn?.UpdateId, request.GetType().Name);
         AgentToolResult Record(AgentToolResult result)
         {
+            if (logger is not null) Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(logger,
+                "Update {UpdateId} stage=tool_completed tool={Tool} outcome={Outcome}.", turn?.UpdateId, request.GetType().Name, result.Outcome);
             if (turn is not null)
             {
                 turn.LastResult = result;

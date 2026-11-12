@@ -92,7 +92,7 @@ de uso; o modelo nunca fornece ator, update_id ou aceite de confirmação.
 Seleção exige texto com ID; cancelamento exige confirmar <código> fora do modelo.
 PersistirTurnosAgente adiciona diário por update para recuperação e estado de
 resposta/envio. Essa migration foi exercitada somente em bancos descartáveis
-(ian_t44_tests, ian_t59_tests e ian_t96_tests); aplicação em banco não descartável continua
+(ian_t44_tests, ian_t59_tests, ian_t96_tests e ian_t98_tests); aplicação em banco não descartável continua
 exigindo autorização específica. Envios incertos não
 são reenviados automaticamente. A #59 homologa o MVP textual com PostgreSQL
 descartável e Telegram/Gemini simulados, conforme docs/homologacao-local.md.
@@ -101,6 +101,12 @@ explícita; homologação simulada não autoriza essas operações.
 
 A #96 preserva a criação pendente ao receber dados pelas Tools de cliente e usa
 esclarecer_pedido sem escrita como alternativa a uma intenção desconhecida.
-RequireAny exige interpretação por Tool desde o primeiro turno. Respostas vêm
+Na #98, interpretação estruturada sem Tools precede a execução Auto das Tools;
+não restaurar RequireAny nem usar a primeira Tool como definição do objetivo.
+O modelo escolhe atos de diálogo; respostas vêm
 dos resultados/dados persistidos, sem códigos técnicos; não usar texto livre do
 modelo para atestar sucesso. Manter deduplicação por update_id, nunca por texto.
+Histórico recente da inbox/diário e intenção persistente acompanham cada turno.
+Logs por update_id registram somente etapas/resultados, nunca conteúdo privado.
+Simulação de protocolo/orquestração não comprova a qualidade semântica do Gemini
+real. Seguir docs/validacao-conversacional-controlada.md somente após autorização.

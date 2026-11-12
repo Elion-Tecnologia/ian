@@ -128,6 +128,8 @@ public static class TelegramWebhookEndpoint
                 update,
                 context.RequestAborted);
 
+            logger.LogInformation("Update {UpdateId} stage=webhook_persisted_or_duplicate.", update.UpdateId);
+
             return Results.Ok();
         }
         catch (OperationCanceledException)
@@ -138,7 +140,7 @@ public static class TelegramWebhookEndpoint
         catch (Exception)
         {
             logger.LogError(
-                "Falha ao armazenar update Telegram {UpdateId}.",
+                "Falha ao armazenar update Telegram {UpdateId} stage=webhook_failed.",
                 update.UpdateId);
 
             return Results.StatusCode(

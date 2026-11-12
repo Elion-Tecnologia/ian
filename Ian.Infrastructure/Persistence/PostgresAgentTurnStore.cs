@@ -61,6 +61,22 @@ public sealed class PostgresAgentTurnStore(IanDbContext db, NpgsqlDataSource dat
         db.Set<TelegramAgentTurn>().AsNoTracking().Where(t => t.TelegramUserId == userId && t.UpdateId < updateId && t.ResponseText != null)
             .OrderByDescending(t => t.UpdateId).Select(t => t.ResponseText).FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<AgentConversationTurn>> GetHistoryAsync(long userId, long updateId, CancellationToken cancellationToken)
+    {
+        var rows = await (from turn in db.Set<TelegramAgentTurn>().AsNoTracking()
+            join inbox in db.TelegramUpdatesInbox.AsNoTracking() on turn.UpdateId equals inbox.UpdateId
+            where turn.TelegramUserId == userId && turn.UpdateId < updateId && turn.ResponseText != null
+            orderby turn.UpdateId descending
+            select new { inbox.PayloadJson, turn.ResponseText }).Take(3).ToListAsync(cancellationToken);
+        return rows.AsEnumerable().Reverse().Select(row =>
+        {
+            using var json = JsonDocument.Parse(row.PayloadJson);
+            var text = json.RootElement.GetProperty("message").GetProperty("text").GetString() ?? "";
+            var resposta = row.ResponseText ?? "";
+            return new AgentConversationTurn(text[..Math.Min(text.Length, 500)], resposta[..Math.Min(resposta.Length, 1000)]);
+        }).ToArray();
+    }
+
     public Task CompletePendingAsync(long userId, CancellationToken cancellationToken) =>
         db.SolicitacoesPendentes.Where(p => p.TelegramUserId == userId && p.Estado == EstadoSolicitacaoPendente.Pendente)
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.Estado, EstadoSolicitacaoPendente.Confirmada), cancellationToken);
