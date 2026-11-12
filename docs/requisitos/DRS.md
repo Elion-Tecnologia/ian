@@ -221,12 +221,12 @@ como requisito ativo.
 | Componente | Proposta final do MVP | Estado do código nesta entrega |
 | --- | --- | --- |
 | Cliente / TipoServico | Preservar cadastro, unicidade e catálogo | Cadastro/localização de cliente implementados na #25, com concorrência pela constraint única; catálogo fixo sem CRUD, seed e consulta read-only implementados na #24. |
-| Agendamento | Sem EquipeId; campos abaixo | Sem EquipeId; criação transacional na #31, consultas tipadas na #32 e edição/reagendamento transacional de Agendado na #33; Versao >=1 como token EF. |
-| PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Motor puro na #30; consultas por períodos efetivos e disponibilidade na #32; substituição atômica na #33. |
+| Agendamento | Sem EquipeId; campos abaixo | Sem EquipeId; criação transacional na #31, consultas tipadas na #32 e edição/reagendamento transacional de Agendado na #33 e conclusão/cancelamento confirmado na #35; Versao >=1 como token EF. |
+| PeriodoOcupacao | Intervalos da agenda única, relação 1:N | Motor puro na #30; consultas por períodos efetivos e disponibilidade na #32; substituição atômica na #33; encerramento #35 inativa as reservas pelo estado, preservando períodos planejados para consulta histórica. |
 | BloqueioAgenda | Fora do modelo ativo na #79; arquivar dados e relações históricas | Sem entidade/DbSet ativo; tabela original movida para legado_mvp pela consolidação. |
 | Equipe / ExcecaoExpediente | Fora do modelo ativo; preservar dados legados | Fora do EF ativo; registros, IDs, FKs e sequences preservados em legado_mvp. |
 | SolicitacaoPendente | Estado mínimo durável e versão da operação | Persistência da intenção, campos coletados/faltantes, candidatos, expiração, cancelamento e retomada; integração do diálogo permanece em #44. |
-| RegistroAuditoria / EnvioTelegram | Preservar histórico e saída privada | Auditoria mínima transacional de edição na #33; auditoria detalhada fora do escopo; demais casos de uso pendentes. |
+| RegistroAuditoria / EnvioTelegram | Preservar histórico e saída privada | Auditoria mínima transacional de edição na #33 e encerramento na #35; auditoria detalhada fora do escopo. |
 | TelegramUpdateInbox / TelegramBusinessOperation | Preservar controles técnicos | Recebimento, recuperação e executor idempotente implementados. |
 
 Agendamento implementado: `Id: long`, `ClienteId: long`, `TipoServicoId: long`,

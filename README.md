@@ -119,7 +119,7 @@ Não iniciar a API de teste apontando para a origem: o consumidor da inbox escre
 | --- | --- |
 | clientes | Cadastro e busca da #25; telefone brasileiro canônico obrigatório e único; endereço principal opcional; resultados 0/1/N sem seleção ambígua. |
 | tipos_servico | Catálogo fixo da #24 com quatro IDs estáveis e duração/unidade/modalidade padrão; consulta somente leitura. |
-| agendamentos | Cliente e serviço obrigatórios; sem equipe; criação #31, consultas 0/1/N da #32 e edição/reagendamento #33; Versao >=1 como token EF; estado e endereço snapshot preservados. |
+| agendamentos | Cliente e serviço obrigatórios; sem equipe; criação #31, consultas 0/1/N da #32 e edição/reagendamento #33 e encerramento #35; Versao >=1 como token EF; estado e endereço snapshot preservados. |
 | periodos_ocupacao | Relação 1:N; intervalos UTC semiabertos usados para programação e disponibilidade, inclusive serviços prolongados. |
 | registros_auditoria | Histórico com FK restritiva para agendamento. |
 | solicitacoes_pendentes / envios_telegram | Contexto e histórico técnico preservados. |
@@ -138,7 +138,15 @@ efeitos de escrita. A #33 disponibiliza IEdicaoAgendamento: exige ID/versão, re
 Agendado sob lock, revalida conflitos e substitui ocupações atomicamente, com
 incremento de versão, idempotência e auditoria mínima. Edição sem endereço
 explícito preserva o snapshot. Busca ambígua reutiliza candidatos persistidos da
-#21 e consulta da #32; integração com Tools fica na #44. A #30 permanece como motor determinístico de períodos no Domain.
+#21 e consulta da #32; integração com Tools fica na #44.
+
+A #35 expõe IEncerramentoAgendamento para conclusão por ID/versão e cancelamento
+com confirmação obrigatória da #22. Estado, versão, vínculo idempotente e auditoria
+mínima são gravados na mesma transação. Períodos planejados são preservados para
+consulta histórica; o estado Concluido/Cancelado os torna inativos nas consultas
+de disponibilidade e na criação. Conclusão antecipada libera reservas futuras
+sem alterar a duração ou o fim previsto. Confirmação repetida/obsoleta é recusada;
+reentrega da conclusão não repete a transição. Não há reabertura ou DELETE. A #30 permanece como motor determinístico de períodos no Domain.
 ### Integração contínua
 
 O fluxo do repositório é Issue → `feature/*` criada a partir de `dev` → Pull Request para `dev` → checks obrigatórios aprovados → squash merge e fechamento da issue. A `main` recebe versões após homologação.

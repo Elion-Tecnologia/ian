@@ -539,7 +539,35 @@ escolha explícita (a #21 persiste `AgendamentoId` nos campos coletados); releia
 o alvo selecionado para obter a versão antes de editar.
 Uma intenção já pendente não é substituída. A seleção e a edição são casos de uso
 internos: autorização de comandos privados e integração das Tools continuam na
-#44; alterações de estado/confirmações pertencem à #35.
+#44.
+
+A #35 disponibiliza `IEncerramentoAgendamento`. `ConcluirAsync` exige update, ID e
+versão esperada; `PrepararCancelamentoAsync` delega o desafio à #22 e
+`CancelarAsync` exige `ConfirmationAcceptance` vinculado ao ator, alvo, argumentos,
+versão e validade. A intenção pendente inequívoca já deve estar persistida conforme
+#22 (campos `agendamentoId` e `operacao=cancelar`, sem faltantes/candidatos). O aceite
+é produzido pela orquestração textual confiável, nunca pelo modelo. Conclusão é
+operação comum sem confirmação extra; sua autorização de comando privado, como
+na criação/edição, será feita na integração da #44.
+
+Somente Agendado transita para Concluido ou Cancelado. Ambas as operações releem
+sob lock global, incrementam Versao, vinculam a operação técnica ao agendamento e
+auditam minimamente ID, operação, update, versão e instante UTC. O cancelamento
+usa exclusivamente a transação de `IOperationConfirmation.ExecuteAsync`, inclusive
+consumo do desafio e revalidação do prazo antes do commit; não inicia outra
+transação. Conclusão usa `agendamento:complete`; cancelamento reutiliza a chave
+`confirmation:<solicitacaoId>` da #22. Reentrega da conclusão retorna o resultado
+original; a confirmação repetida é recusada conforme #22, sem repetir a escrita.
+
+Períodos planejados são preservados integralmente como histórico, inclusive na
+conclusão antecipada: tornam-se inativos com o estado terminal. Criação e
+disponibilidade já filtram somente Agendado, liberando imediatamente as reservas
+futuras/ativas após o commit. Consulta por ID/data/estado continua encontrando o
+compromisso e seu planejamento original. Não são registrados períodos realizados
+nem recalculada duração, endereço ou início/fim previstos. Rollback preserva
+agenda, períodos, versão, auditoria, vínculo e consumo do desafio. Não há reabertura,
+extensão automática, DELETE ou nova migration.
+
 ## 8. Idempotência e recuperação
 
 O recebimento utiliza `update_id` para identificar
