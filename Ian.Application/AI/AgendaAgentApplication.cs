@@ -33,10 +33,8 @@ public sealed class AgendaAgentApplication(
             var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken);
             if (pending is null && interpretation.Plan.Objetivo == DialogueGoal.CriarAgendamento)
             {
-                var today = Regex.IsMatch(turn.Text, @"\bhoje\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-                    ? DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo")).DateTime)
-                    : (DateOnly?)null;
-                turn.PendingResult = await PrepararAsync(new CriarAgendamentoToolRequest(null, null, null, today, null, null, null, null), cancellationToken);
+                var initial = PendingTurnDataCapture.InitialSchedule(turn.Text, clock.GetUtcNow());
+                turn.PendingResult = await PrepararAsync(initial, cancellationToken);
                 pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken);
             }
             if (pending?.Intent == PendingIntent.CriarAgendamento && interpretation.Plan.Objetivo == DialogueGoal.CriarAgendamento &&
@@ -107,6 +105,18 @@ public sealed class AgendaAgentApplication(
         return await PrepararAsync(AgentRequestJson.Deserialize(node.ToJsonString()), cancellationToken);
     }
 
+    public async Task<AgentToolResult?> CapturePendingReplyAsync(CancellationToken ct)
+    {
+        var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
+        if (pending is null) return null;
+        if (PendingTurnDataCapture.Capture(turn.Text, pending) is { } request)
+            return await ExecuteAsync(request, ct);
+        if (PendingTurnDataCapture.IsInvalidPhoneReply(turn.Text, pending))
+            return AgentToolResult.Missing("Esse telefone não parece válido. Pode informar um telefone brasileiro com DDD?") with
+                { DialogueMode = AgentDialogueMode.Collection, QuestionTopic = "telefone", FailureCategory = AgentFailureCategory.InvalidArguments };
+        return null;
+    }
+
     private long UserId => turn.Caller?.UserId ?? throw new InvalidOperationException("Turno não autorizado.");
 
     private async Task<AgentToolResult> PrepararAsync(AgentToolRequest request, CancellationToken ct)
@@ -133,6 +143,8 @@ public sealed class AgendaAgentApplication(
         {
             var merged = JsonNode.Parse(old)?.AsObject() ?? throw new InvalidOperationException();
             var incoming = JsonNode.Parse(AgentRequestJson.Serialize(request))?.AsObject() ?? throw new InvalidOperationException();
+            foreach (var pair in incoming.ToArray())
+                if (pair.Value is JsonValue value && value.TryGetValue<string>(out var text) && string.IsNullOrWhiteSpace(text)) incoming[pair.Key] = null;
             if (request is CriarAgendamentoToolRequest && incoming["clienteId"] is null)
             {
                 var nameChanged = incoming["nomeCliente"] is { } name && !JsonNode.DeepEquals(name, merged["nomeCliente"]);
@@ -454,7 +466,9 @@ public sealed class AgendaAgentApplication(
         if (pending?.Intent == PendingIntent.CriarAgendamento &&
             pending.CollectedFields.GetValueOrDefault("request") is { } request)
             pergunta = await PrepararCriacaoAsync((CriarAgendamentoToolRequest)AgentRequestJson.Deserialize(request), ct, somentePerguntar: true);
-        if (plan.Resposta == DialogueReply.ExplicarCatalogo)
+        var catalogRequested = PendingTurnDataCapture.IsCatalogRequest(turn.Text);
+        if (catalogRequested || plan.Resposta == DialogueReply.ExplicarCatalogo && turn.CatalogWasShown &&
+            Regex.IsMatch(turn.Text, @"\b(o que é|o que e|explique|não entendi|nao entendi)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
             var catalog = await ServicosAsync(ct);
             var texto = "Essa é a lista de serviços que você pode agendar. As durações são os padrões de cada serviço e podem ser informadas no pedido.\n" + catalog.Message;
@@ -462,15 +476,13 @@ public sealed class AgendaAgentApplication(
             return AgentToolResult.Succeeded(texto + "\n" + (pergunta?.Message ?? "Qual serviço você deseja agendar?")) with
                 { DialogueMode = AgentDialogueMode.Explanation };
         }
+        if (plan.Resposta == DialogueReply.ExplicarCatalogo && pergunta is not null)
+            return AgentToolResult.Missing("Estou pedindo o próximo dado necessário para continuar seu agendamento. " + pergunta.Message);
         if (plan.Resposta == DialogueReply.ExplicarPedido && pergunta is not null)
             return AgentToolResult.Missing("Esses dados são necessários para reservar o serviço corretamente. " + pergunta.Message) with
                 { DialogueMode = AgentDialogueMode.Explanation };
         if (pergunta is not null && (plan.Objetivo is DialogueGoal.CriarAgendamento or DialogueGoal.Continuar || plan.Resposta == DialogueReply.Coletar))
-            return turn.CatalogResult is { } catalogo ? pergunta with
-            {
-                Message = pergunta.Message + "\n" + catalogo.Message,
-                RequiredFacts = (pergunta.RequiredFacts is null ? "" : pergunta.RequiredFacts + "\n") + catalogo.Message
-            } : pergunta;
+            return pergunta;
         return turn.PendingResult ?? turn.LastResult ?? pergunta ?? AgentToolResult.Missing("Qual informação da agenda você deseja consultar ou organizar?");
     }
     private async Task<AgentToolResult> EsclarecerAsync(CancellationToken ct)

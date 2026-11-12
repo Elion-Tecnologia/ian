@@ -270,6 +270,21 @@ migration, nova dependência, endpoint ou serviço externo. Testes usam SDK/HTTP
 simulados e PostgreSQL descartável; não consomem Gemini real nem demonstram a
 qualidade semântica do provedor em produção.
 
+### Captura contextual de dados (#105)
+
+Respostas isoladas de nome e telefone preenchem o próximo campo pendente de
+um agendamento antes de chamar o modelo. A captura aceita somente dados
+inequívocos, reutiliza a validação de telefone existente e respeita seleção,
+confirmação, autorização e o lock por usuário. Dados seguem no pedido persistido;
+cliente e agendamento só são gravados quando todas as validações permitem.
+
+Campos nulos ou vazios de Tools não apagam valores coletados. Datas e horários
+iniciais inequívocos, incluindo segunda-feira às 9h, usam America/Sao_Paulo e
+permanecem no contexto. Catálogo não é anexado à coleta de nome/telefone;
+continua disponível quando solicitado ou para esclarecer o tipo de serviço.
+Saudação simples com resposta inválida do modelo recebe fallback social e
+preserva o pedido. Logs de captura indicam campo/resultado, sem valores privados.
+
 ### Diálogo textual integrado (#44)
 
 O handler ativo conecta Telegram autorizado → MAF/Gemini → sete Tools tipadas →
