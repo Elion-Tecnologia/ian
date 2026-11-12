@@ -34,6 +34,7 @@ public sealed record AgentToolResult
     public AgentDialogueMode DialogueMode { get; init; }
     public string? QuestionTopic { get; init; }
     public string? RequiredFacts { get; init; }
+    public IReadOnlyList<string> ConfirmedAcknowledgements { get; init; } = [];
     public AgentFailureCategory FailureCategory { get; init; }
 
     public static AgentToolResult Succeeded(string message, object? data = null) =>

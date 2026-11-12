@@ -40,7 +40,7 @@ public sealed class PendingTurnDataCaptureTests
     {
         var pending = Pending("telefonecomDDD", "Gabriel Ramos");
         Assert.Equal("13997209208", PendingTurnDataCapture.Capture(text, pending)?.TelefoneCliente);
-        Assert.Null(PendingTurnDataCapture.Capture(text, Pending("nomedocliente")));
+        Assert.Equal("13997209208", PendingTurnDataCapture.Capture(text, Pending("nomedocliente"))?.TelefoneCliente);
         Assert.Null(PendingTurnDataCapture.Capture(text, pending with { Intent = PendingIntent.AlterarAgendamento }));
         Assert.Null(PendingTurnDataCapture.Capture(text, pending with
             { CandidateIds = new Dictionary<string, IReadOnlyList<long>> { ["cliente"] = [1, 2] } }));

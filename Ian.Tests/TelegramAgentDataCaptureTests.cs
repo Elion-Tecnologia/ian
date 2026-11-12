@@ -66,7 +66,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("listar_servicos", new { });
         await f.SendAsync(6, "Quais serviços posso escolher?");
         Assert.Contains("Serviços:", f.Transport.Replies[^1]);
-        f.Model.Tool("criar_agendamento", new { tipoServicoId = 1L });
+        // Service names now resolve directly from the backend catalog.
         await f.SendAsync(7, "Visita técnica.");
         Assert.Contains("endereço", f.Transport.Replies[^1]);
         Assert.DoesNotContain("nome", f.Transport.Replies[^1]);

@@ -27,7 +27,7 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.DoesNotContain("informe nome", f.Transport.Replies[^1]);
 
         f.Restart();
-        f.Model.Tool("cadastrar_cliente", new { nome = "Ana", telefone = "11999999999" });
+        // The explicit phone is captured locally; no model reply is queued for this turn.
         await f.SendAsync(3, "O telefone é 11999999999.");
         Assert.DoesNotContain("telefone", f.Transport.Replies[^1]); // Already collected; only the requested time remains unresolved.
         Assert.Contains("10:00", f.Transport.Replies[^1]);
@@ -47,7 +47,6 @@ public sealed partial class TelegramAgentPostgresTests
             Assert.Single(await committed.Agendamentos.ToListAsync());
             Assert.Equal(7, await committed.PeriodosOcupacao.CountAsync());
         };
-        f.Model.Tool("criar_agendamento", new { horario = "08:00" });
         await f.SendAsync(4, "Pode iniciar às 08h.");
         await using (var db = PostgresTestDatabase.CreateContext()) Assert.Single(await db.Agendamentos.ToListAsync());
         var resumo = f.Transport.Replies[^1];
