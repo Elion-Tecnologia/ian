@@ -30,12 +30,25 @@ public sealed class AgendaAgentApplication(
         if (turn.SelectionRequired && request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest)
             return AgentToolResult.Ambiguity("Selecione explicitamente um dos IDs apresentados antes de executar outra operação.");
         if (turn.MutationResult is { } completed) return completed;
+        if (turn.ClarificationResult is { } clarification && request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest)
+            return clarification;
         if (turn.WriteAttempted && request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest)
-            return AgentToolResult.Failed("Esta operação já foi tentada neste update. Consulte a agenda antes de um novo pedido.");
+            return AgentToolResult.Failed("Já tentei executar este pedido. Consulte a agenda antes de tentar novamente.");
+        if (request is CadastrarClienteToolRequest or LocalizarClienteToolRequest &&
+            (await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken))?.Intent == PendingIntent.CriarAgendamento)
+        {
+            // Customer tools supply data to the existing goal. Creation still owns the single,
+            // atomic write of customer + appointment; no independent customer write is performed.
+            var dados = request is CadastrarClienteToolRequest cadastro
+                ? new CriarAgendamentoToolRequest(cadastro.Nome, cadastro.Telefone, null, null, null, null, null, null)
+                : new CriarAgendamentoToolRequest(((LocalizarClienteToolRequest)request).Nome,
+                    ((LocalizarClienteToolRequest)request).Telefone, null, null, null, null, null, null);
+            return turn.PendingResult = await ExecuteAsync(dados, cancellationToken);
+        }
         return request switch
         {
-            ListarServicosToolRequest => AgentToolResult.Succeeded("Serviços: " + string.Join("; ",
-                (await catalogo.ListarAsync(cancellationToken)).Select(t => $"ID {t.Id}: {t.Nome}, {t.DuracaoPadrao} {t.UnidadeDuracaoPadrao}, {t.ModalidadePadrao}"))),
+            EsclarecerPedidoToolRequest => await EsclarecerAsync(cancellationToken),
+            ListarServicosToolRequest => await ServicosAsync(cancellationToken),
             LocalizarClienteToolRequest r => await LocalizarAsync(r, cancellationToken),
             ConsultarAgendaToolRequest r => await ConsultarAsync(r, cancellationToken),
             VerificarDisponibilidadeToolRequest r => await DisponibilidadeAsync(r, cancellationToken),
@@ -49,7 +62,7 @@ public sealed class AgendaAgentApplication(
         if (await turns.GetCommittedAppointmentAsync(turn.UpdateId, cancellationToken) is { } id)
         {
             await turns.CompletePendingAsync(UserId, cancellationToken);
-            return turn.MutationResult = AgentToolResult.Succeeded($"Solicitação já persistida para o agendamento {id}. Consulte a agenda para os dados atuais.");
+            return turn.MutationResult = await ResumoAsync(id, "Seu pedido já foi salvo. Dados atuais", cancellationToken);
         }
         return await PersistirAsync(AgentRequestJson.Deserialize(commandJson), cancellationToken);
     }
@@ -68,7 +81,7 @@ public sealed class AgendaAgentApplication(
             if (found.Estado != EstadoLocalizacaoCliente.Unico) return AgentToolResult.ConflictResult("Cliente não encontrado. Refaça a busca.");
             await turns.CompletePendingAsync(UserId, cancellationToken);
             var c = found.Clientes[0];
-            return AgentToolResult.Succeeded($"Cliente selecionado: ID {c.Id}, {c.Nome}, telefone {c.TelefoneNormalizado}.");
+            return AgentToolResult.Succeeded($"Cliente selecionado: {c.Nome}, telefone {c.TelefoneNormalizado}.", c);
         }
         var node = JsonNode.Parse(json)?.AsObject() ?? throw new InvalidOperationException("Solicitação ausente.");
         foreach (var field in new[] { "clienteId", "agendamentoId" })
@@ -86,7 +99,7 @@ public sealed class AgendaAgentApplication(
             await turns.GetCommittedAppointmentAsync(previousId, ct) is { } persistedId)
         {
             await turns.CompletePendingAsync(UserId, ct);
-            return turn.MutationResult = AgentToolResult.Succeeded($"O pedido pendente já foi persistido no agendamento {persistedId}. Consulte a agenda antes de um novo pedido.");
+            return turn.MutationResult = await ResumoAsync(persistedId, "Seu pedido já foi salvo. Dados atuais", ct);
         }
         if (pending?.CandidateIds.Count > 0)
             return AgentToolResult.Ambiguity("Selecione explicitamente um ID: envie cliente <ID> ou agendamento <ID>.", pending.CandidateIds);
@@ -160,9 +173,10 @@ public sealed class AgendaAgentApplication(
         var missing = new List<string>();
         if (string.IsNullOrWhiteSpace(r.NomeCliente)) missing.Add("nome do cliente");
         if (string.IsNullOrWhiteSpace(r.TelefoneCliente)) missing.Add("telefone com DDD");
-        if (tipo is null) missing.Add("ID do serviço (use listar_servicos)");
+        if (tipo is null) missing.Add("serviço desejado");
         if (r.Data is null) missing.Add("data");
         var effective = r;
+        var horarioDivergente = false;
         if (tipo is not null)
         {
             // Keep inferred catalog defaults out of the collected request. A later service change
@@ -170,14 +184,23 @@ public sealed class AgendaAgentApplication(
             effective = r with { Modalidade = r.Modalidade ?? tipo.ModalidadePadrao.ToString(), Duracao = r.Duracao ?? tipo.DuracaoPadrao,
                 UnidadeDuracao = r.UnidadeDuracao ?? tipo.UnidadeDuracaoPadrao.ToString() };
             if (TryEnum<UnidadeDuracao>(effective.UnidadeDuracao, out var unit) && unit == UnidadeDuracao.Minutos && r.Horario is null) missing.Add("horário");
+            horarioDivergente = unit == UnidadeDuracao.DiasCorridos && r.Horario is { } inicio && inicio != new TimeOnly(8, 0);
             if (TryEnum<ModalidadeServico>(effective.Modalidade, out var mode) && mode == ModalidadeServico.Externo && string.IsNullOrWhiteSpace(r.EnderecoServico))
             {
                 var endereco = found?.Clientes.FirstOrDefault()?.EnderecoPrincipal;
                 if (string.IsNullOrWhiteSpace(endereco)) missing.Add("endereço do serviço");
             }
         }
+        if (horarioDivergente) missing.Add("horário de início");
         await SavePendingAsync(r, missing, null, ct);
-        return missing.Count > 0 ? Missing(missing) : await PersistirAsync(effective, ct);
+        if (missing.Count == 0) return await PersistirAsync(effective, ct);
+        var campos = missing.Where(c => c != "horário de início").ToArray();
+        var mensagem = campos.Length == 0 ? "" : $"Para agendar{(r.NomeCliente is null ? "" : " o serviço de " + r.NomeCliente)}, informe {string.Join(", ", campos)}. ";
+        if (horarioDivergente)
+            mensagem += $"Você pediu início às {r.Horario:HH:mm}. Serviços em dias corridos reservam 08h–18h em cada data, inclusive a primeira. Podemos iniciar às 08h?";
+        var result = AgentToolResult.Missing(mensagem.Trim());
+        if (horarioDivergente) turn.ClarificationResult = result;
+        return result;
     }
 
     private async Task<AgentToolResult> PrepararAlteracaoAsync(AlterarAgendamentoToolRequest r, CancellationToken ct)
@@ -260,7 +283,9 @@ public sealed class AgendaAgentApplication(
         {
             case CadastrarClienteToolRequest r:
                 var cliente = await clientes.CadastrarAsync(new(r.Nome, r.Telefone, r.EnderecoPrincipal), ct);
-                result = cliente.Cliente is { } c ? AgentToolResult.Succeeded($"Cliente {c.Id}: {c.Nome} cadastrado/localizado.")
+                result = cliente.Cliente is { } c ? AgentToolResult.Succeeded(cliente.Estado == EstadoCadastroCliente.Cadastrado
+                    ? $"Cadastrei {c.Nome} com o telefone {c.TelefoneNormalizado}."
+                    : $"Encontrei o cadastro de {c.Nome}, telefone {c.TelefoneNormalizado}.")
                     : AgentToolResult.Missing("Informe nome e telefone brasileiro válido com DDD.");
                 break;
             case CriarAgendamentoToolRequest r:
@@ -271,9 +296,9 @@ public sealed class AgendaAgentApplication(
                     r.Data.Value, r.Horario, modalidade, r.Duracao, unidade, r.EnderecoServico, r.Observacoes), ct);
                 result = criado.Estado switch
                 {
-                    EstadoCriacaoAgendamento.Criado or EstadoCriacaoAgendamento.Reentrega => AgentToolResult.Succeeded($"Agendamento {criado.AgendamentoId} criado."),
-                    EstadoCriacaoAgendamento.RequerEsclarecimento => AgentToolResult.Missing("DiasCorridos reserva 08h–18h em todas as datas. Confirme início às 08h; não é permitido início parcial."),
-                    EstadoCriacaoAgendamento.Conflito => AgentToolResult.ConflictResult("O período está ocupado. Escolha outro horário/data."),
+                    EstadoCriacaoAgendamento.Criado or EstadoCriacaoAgendamento.Reentrega when criado.AgendamentoId is { } salvo => await ResumoAsync(salvo, "Agendamento criado", ct),
+                    EstadoCriacaoAgendamento.RequerEsclarecimento => AgentToolResult.Missing("Serviços em dias corridos reservam 08h–18h em cada data. Podemos iniciar às 08h?"),
+                    EstadoCriacaoAgendamento.Conflito => AgentToolResult.ConflictResult("Não consegui agendar: há conflito com outro compromisso nesse período. Escolha outra data ou horário."),
                     EstadoCriacaoAgendamento.DadosInvalidos => AgentToolResult.Missing("Revise os dados do cliente, endereço, duração e horário dentro de 08h–18h."),
                     _ => AgentToolResult.Failed("Não foi possível criar o agendamento.")
                 };
@@ -298,7 +323,7 @@ public sealed class AgendaAgentApplication(
                         modalidadeEditada, r.Duracao, unidadeEditada, r.EnderecoServico, r.Observacoes, r.AlterarEndereco == true, r.AlterarObservacoes == true), ct);
                     result = editado.Estado switch
                     {
-                        EstadoEdicaoAgendamento.Editado or EstadoEdicaoAgendamento.Reentrega => AgentToolResult.Succeeded($"Agendamento {editado.AgendamentoId} atualizado."),
+                        EstadoEdicaoAgendamento.Editado or EstadoEdicaoAgendamento.Reentrega => await ResumoAsync(id, "Agendamento atualizado", ct),
                         EstadoEdicaoAgendamento.RequerEsclarecimento => AgentToolResult.Missing("DiasCorridos exige início às 08h e janelas completas. Esclareça o horário."),
                         _ => AgentToolResult.ConflictResult("Edição recusada. Releia o agendamento e revise versão, estado, dados e conflitos.")
                     };
@@ -310,6 +335,11 @@ public sealed class AgendaAgentApplication(
                 break;
             default: result = AgentToolResult.Missing("Complete os dados do pedido."); break;
         }
+        if (result.Outcome == AgentToolOutcome.Success && request is AlterarAgendamentoToolRequest { Operacao: "concluir", AgendamentoId: { } concluido })
+            result = await ResumoAsync(concluido, "Agendamento concluído", ct);
+        if (result.Outcome == AgentToolOutcome.Success && request is ConfirmarCancelamentoCommand cancelamento &&
+            cancelamento.Acceptance.Arguments.AgendamentoId is { } cancelado)
+            result = await ResumoAsync(cancelado, "Agendamento cancelado", ct);
         turn.MutationResult = result;
         if (result.Outcome == AgentToolOutcome.Success)
         {
@@ -335,7 +365,7 @@ public sealed class AgendaAgentApplication(
         }
         return result.Estado == EstadoLocalizacaoCliente.Invalido ? AgentToolResult.Missing("Informe nome ou telefone brasileiro com DDD.")
             : AgentToolResult.Succeeded(result.Clientes.Count == 0 ? "Nenhum cliente encontrado."
-                : string.Join("; ", result.Clientes.Select(c => $"ID {c.Id}: {c.Nome}, telefone {c.TelefoneNormalizado}")) + (result.MaisResultados ? ". Refine a busca." : ""));
+                : string.Join("; ", result.Clientes.Select(c => $"{c.Nome}, telefone {c.TelefoneNormalizado}")) + (result.MaisResultados ? ". Refine a busca." : ""), result.Clientes);
     }
 
     private async Task<AgentToolResult> ConsultarAsync(ConsultarAgendaToolRequest r, CancellationToken ct)
@@ -370,6 +400,42 @@ public sealed class AgendaAgentApplication(
     }
 
     private AgentToolCaller RequiredCaller() => turn.Caller ?? throw new InvalidOperationException("Ator ausente.");
+    private async Task<AgentToolResult> EsclarecerAsync(CancellationToken ct)
+    {
+        var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
+        if (pending is null) return AgentToolResult.Missing("Como posso ajudar com sua agenda?");
+        if (pending.CandidateIds.Count > 0)
+            return AgentToolResult.Ambiguity("Para continuar seu pedido, selecione um dos clientes ou agendamentos apresentados.");
+        // An unclear turn must neither discard the goal nor execute an otherwise complete request.
+        return AgentToolResult.Missing(pending.Intent == PendingIntent.CriarAgendamento
+            ? "Seu agendamento continua pendente. Você pode completar os dados solicitados ou me dizer o que deseja esclarecer."
+            : "Seu pedido continua pendente. Você pode completar os dados solicitados ou me dizer o que deseja esclarecer.");
+    }
+    private async Task<AgentToolResult> ServicosAsync(CancellationToken ct)
+    {
+        var tipos = await catalogo.ListarAsync(ct);
+        return AgentToolResult.Succeeded("Serviços: " + string.Join("; ",
+            tipos.Select(t => $"{t.Nome}: {Duracao(t.DuracaoPadrao, t.UnidadeDuracaoPadrao)}")),
+            tipos.Select(t => new { t.Id, t.Nome, t.DuracaoPadrao,
+                UnidadeDuracaoPadrao = t.UnidadeDuracaoPadrao.ToString(), ModalidadePadrao = t.ModalidadePadrao.ToString() }).ToArray());
+    }
+    private async Task<AgentToolResult> ResumoAsync(long id, string titulo, CancellationToken ct)
+    {
+        var resultado = await consulta.ConsultarAsync(new(AgendamentoId: id), ct);
+        var a = resultado.Agendamentos.SingleOrDefault();
+        if (a is null) return AgentToolResult.Failed("Não foi possível consultar o agendamento salvo.");
+        var periodos = a.Periodos.OrderBy(p => p.Data).ThenBy(p => p.Inicio).ToArray();
+        var datas = periodos[0].Data == periodos[^1].Data
+            ? periodos[0].Data.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
+            : $"{periodos[0].Data:dd/MM/yyyy} a {periodos[^1].Data:dd/MM/yyyy}";
+        var horarios = a.UnidadeDuracao == UnidadeDuracao.DiasCorridos ? "08h–18h em cada dia"
+            : string.Join("; ", periodos.Select(p => $"{p.Data:dd/MM/yyyy} {p.Inicio:HH:mm}–{p.Fim:HH:mm}"));
+        var endereco = a.EnderecoServico is null ? "" : $"\nEndereço: {a.EnderecoServico}.";
+        var observacoes = string.IsNullOrWhiteSpace(a.Observacoes) ? "" : $"\nObservações: {a.Observacoes}";
+        return AgentToolResult.Succeeded($"{titulo}: {a.TipoServicoNome} para {a.ClienteNome}, {datas}.\n{Duracao(a.Duracao, a.UnidadeDuracao)} — {horarios}.{endereco}{observacoes}");
+    }
+    private static string Duracao(int valor, UnidadeDuracao unidade) => unidade == UnidadeDuracao.DiasCorridos
+        ? $"{valor} {(valor == 1 ? "dia corrido" : "dias corridos")}" : $"{valor} minutos";
     private static AgentToolResult Missing(IReadOnlyList<string> fields) => AgentToolResult.Missing("Informe: " + string.Join(", ", fields) + ".");
     private static bool TryEnum<T>(string? value, out T parsed) where T : struct, Enum =>
         Enum.TryParse(value, true, out parsed) && Enum.IsDefined(parsed) && Enum.GetNames<T>().Contains(value, StringComparer.OrdinalIgnoreCase);

@@ -44,6 +44,7 @@ public sealed record AgentToolCaller(long UserId, long ChatId, bool IsPrivateCha
 [JsonDerivedType(typeof(CadastrarClienteToolRequest), "cadastrar")]
 [JsonDerivedType(typeof(LocalizarClienteToolRequest), "localizar")]
 [JsonDerivedType(typeof(ListarServicosToolRequest), "servicos")]
+[JsonDerivedType(typeof(EsclarecerPedidoToolRequest), "esclarecer")]
 [JsonDerivedType(typeof(ConsultarAgendaToolRequest), "consultar")]
 [JsonDerivedType(typeof(VerificarDisponibilidadeToolRequest), "disponibilidade")]
 [JsonDerivedType(typeof(CriarAgendamentoToolRequest), "criar")]
@@ -52,6 +53,7 @@ public sealed record AgentToolCaller(long UserId, long ChatId, bool IsPrivateCha
 public abstract record AgentToolRequest;
 public sealed record LocalizarClienteToolRequest(string? Nome = null, string? Telefone = null) : AgentToolRequest;
 public sealed record ListarServicosToolRequest : AgentToolRequest;
+public sealed record EsclarecerPedidoToolRequest : AgentToolRequest;
 // Trusted text orchestration only. This command is never registered as a model tool.
 public sealed record ConfirmarCancelamentoCommand(Ian.Application.Conversation.ConfirmationAcceptance Acceptance) : AgentToolRequest;
 public sealed record CadastrarClienteToolRequest(string? Nome, string? Telefone, string? EnderecoPrincipal) : AgentToolRequest;
@@ -86,7 +88,7 @@ public sealed class AgentExecutionBudget
 
 public static class AgentToolPolicy
 {
-    public const string SystemInstructions = "Você é o assistente textual da agenda. Use somente as ferramentas disponíveis e somente para as capacidades descritas nelas. Colete os dados obrigatórios antes de chamar uma ferramenta. O backend decide validação, disponibilidade, autorização e confirmação. Nunca afirme que uma operação ocorreu sem resultado Success. Em MissingData ou Ambiguous, peça esclarecimento; em Conflict, explique que não foi concluída; em ConfirmationRequired, peça confirmação explícita; em Error, informe que não foi possível concluir. Não invente dados nem exponha detalhes internos.";
+    public const string SystemInstructions = "Você é o assistente textual da agenda. Interprete a intenção em português natural e use a ferramenta correspondente mesmo com dados parciais ou sem argumentos. Um pedido de agendar inicia criar_agendamento; não exija palavras exatas nem que a pessoa escolha entre operações. Cadastro e localização de cliente são etapas intermediárias quando há um agendamento pendente. Preserve esse objetivo e use somente os novos dados informados. Se não houver intenção identificável, use esclarecer_pedido, sem inventar uma operação. O backend decide validação, disponibilidade, autorização e confirmação. Nunca afirme que uma operação ocorreu sem resultado Success. Em MissingData ou Ambiguous, peça esclarecimento; em Conflict, explique que não foi concluída; em ConfirmationRequired, peça confirmação explícita; em Error, informe que não foi possível concluir. Não invente dados nem exponha detalhes internos.";
 }
 
 public static class AgentToolResultTranslator
@@ -101,14 +103,6 @@ public static class AgentToolResultTranslator
             : result.Message.Trim();
         if (message.Length > AgentExecutionLimits.MaxToolResultCharacters)
             message = message[..AgentExecutionLimits.MaxToolResultCharacters];
-        return result.Outcome switch
-        {
-            AgentToolOutcome.Success => $"Operação concluída: {message}",
-            AgentToolOutcome.MissingData => $"Faltam dados: {message}",
-            AgentToolOutcome.Ambiguous => $"Preciso esclarecer: {message}",
-            AgentToolOutcome.Conflict => $"A operação não foi concluída devido a um conflito: {message}",
-            AgentToolOutcome.ConfirmationRequired => $"Confirmação necessária: {message}",
-            _ => "Não foi possível concluir a solicitação."
-        };
+        return message;
     }
 }

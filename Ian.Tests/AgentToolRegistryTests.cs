@@ -27,8 +27,8 @@ public sealed class AgentToolRegistryTests
         var registry = scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>();
         var tools = registry.CreateTools(new AgentToolCaller(42, 42, true, true, true));
 
-        Assert.Equal(7, tools.Count);
-        Assert.Equal(new[] { "cadastrar_cliente", "localizar_cliente", "listar_servicos", "consultar_agenda", "verificar_disponibilidade", "criar_agendamento", "alterar_agendamento" },
+        Assert.Equal(8, tools.Count);
+        Assert.Equal(new[] { "cadastrar_cliente", "localizar_cliente", "listar_servicos", "consultar_agenda", "verificar_disponibilidade", "criar_agendamento", "alterar_agendamento", "esclarecer_pedido" },
             tools.Select(tool => tool.Name));
         Assert.IsType<GeminiAiModel>(provider.GetRequiredService<IAiModel>());
     }

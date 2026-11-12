@@ -92,9 +92,15 @@ de uso; o modelo nunca fornece ator, update_id ou aceite de confirmação.
 Seleção exige texto com ID; cancelamento exige confirmar <código> fora do modelo.
 PersistirTurnosAgente adiciona diário por update para recuperação e estado de
 resposta/envio. Essa migration foi exercitada somente em bancos descartáveis
-(ian_t44_tests e ian_t59_tests); aplicação em banco não descartável continua
+(ian_t44_tests, ian_t59_tests e ian_t96_tests); aplicação em banco não descartável continua
 exigindo autorização específica. Envios incertos não
 são reenviados automaticamente. A #59 homologa o MVP textual com PostgreSQL
 descartável e Telegram/Gemini simulados, conforme docs/homologacao-local.md.
 Chamadas reais e migrations em bancos não descartáveis exigem autorização
 explícita; homologação simulada não autoriza essas operações.
+
+A #96 preserva a criação pendente ao receber dados pelas Tools de cliente e usa
+esclarecer_pedido sem escrita como alternativa a uma intenção desconhecida.
+RequireAny exige interpretação por Tool desde o primeiro turno. Respostas vêm
+dos resultados/dados persistidos, sem códigos técnicos; não usar texto livre do
+modelo para atestar sucesso. Manter deduplicação por update_id, nunca por texto.

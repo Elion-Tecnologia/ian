@@ -95,7 +95,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("criar_agendamento", Criar(horario: "08:00")); // A model retry must not accept clarification for the human.
         await f.SendAsync(1, "Montagem com início divergente.");
         Assert.Contains("08h", f.Transport.Replies[^1]);
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento criado", f.Transport.Replies[^1]);
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Empty(await db.Agendamentos.ToListAsync());
         Assert.Empty(await db.PeriodosOcupacao.ToListAsync());
@@ -142,7 +142,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("criar_agendamento", new { nomeCliente = "Ana", telefoneCliente = "11999999999", tipoServicoId = 1L,
             data = "2030-01-07", horario, enderecoServico = "Rua A" });
         await f.SendAsync(1, "Visita fora do expediente.");
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento criado", f.Transport.Replies[^1]);
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Empty(await db.Agendamentos.ToListAsync());
         Assert.Empty(await db.Clientes.ToListAsync());
@@ -190,7 +190,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Clock.Advance(TimeSpan.FromMinutes(5));
         f.Restart();
         await f.SendAsync(3, "confirmar " + expired);
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento cancelado", f.Transport.Replies[^1]);
         await using (var db = PostgresTestDatabase.CreateContext())
         {
             Assert.Equal(EstadoAgendamento.Agendado, (await db.Agendamentos.SingleAsync()).Estado);
@@ -256,7 +256,7 @@ public sealed partial class TelegramAgentPostgresTests
         await f.MakeRetryReadyAsync(3);
         await f.ProcessAsync();
         Assert.Equal(calls, f.Model.Calls);
-        Assert.Contains("já persistida", f.Transport.Replies[^1]);
+        Assert.Contains("já foi salvo", f.Transport.Replies[^1]);
         await using var db = PostgresTestDatabase.CreateContext();
         var atual = await db.Agendamentos.SingleAsync();
         Assert.Equal(2, atual.Versao);
@@ -294,7 +294,9 @@ public sealed partial class TelegramAgentPostgresTests
             f.Model.Tool("alterar_agendamento", new { agendamentoId = 1L, operacao, observacoes = operacao == "editar" ? "Nao gravar" : null });
             await f.SendAsync(3, "Execute a alteração do agendamento 1.");
         }
-        Assert.DoesNotContain("Operação concluída", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento atualizado", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento concluído", f.Transport.Replies[^1]);
+        Assert.DoesNotContain("Agendamento cancelado", f.Transport.Replies[^1]);
         Assert.Equal(before, await HistoricoSnapshotAsync(db));
         Assert.Empty(await db.RegistrosAuditoria.ToListAsync());
         Assert.Single(await db.TelegramBusinessOperations.ToListAsync());
