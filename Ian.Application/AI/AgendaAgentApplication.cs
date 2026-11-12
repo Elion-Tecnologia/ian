@@ -204,10 +204,17 @@ public sealed class AgendaAgentApplication(
             ? AgentToolResult.Missing("Os dados do pedido estão completos. Informe se deseja prosseguir com o agendamento.")
             : await PersistirAsync(effective, ct);
         var campos = missing.Where(c => c != "horário de início").ToArray();
-        var mensagem = campos.Length == 0 ? "" : $"Para agendar{(r.NomeCliente is null ? "" : " o serviço de " + r.NomeCliente)}, informe {string.Join(", ", campos)}. ";
+        var questions = campos.Length == 0 ? [] : CollectionQuestions(campos[0]);
+        var mensagem = questions.FirstOrDefault() ?? "";
+        var clarification = "";
         if (horarioDivergente)
-            mensagem += $"Você pediu início às {r.Horario:HH:mm}. Serviços em dias corridos reservam 08h–18h em cada data, inclusive a primeira. Podemos iniciar às 08h?";
-        var result = AgentToolResult.Missing(mensagem.Trim());
+            clarification = $"Você pediu início às {r.Horario:HH:mm}. Serviços em dias corridos reservam 08h–18h em cada data, inclusive a primeira. " +
+                (campos.Length == 0 ? "Podemos iniciar às 08h?" : "Precisaremos esclarecer o início às 08h antes de agendar.");
+        if (clarification.Length > 0) mensagem = (mensagem + " " + clarification).Trim();
+        var result = AgentToolResult.Missing(mensagem) with
+        {
+            RedacoesPermitidas = questions.Skip(1).Select(q => (q + " " + clarification).Trim()).ToArray()
+        };
         if (horarioDivergente) turn.ClarificationResult = result;
         return result;
     }
@@ -333,8 +340,8 @@ public sealed class AgendaAgentApplication(
                     result = editado.Estado switch
                     {
                         EstadoEdicaoAgendamento.Editado or EstadoEdicaoAgendamento.Reentrega => await ResumoAsync(id, "Agendamento atualizado", ct),
-                        EstadoEdicaoAgendamento.RequerEsclarecimento => AgentToolResult.Missing("DiasCorridos exige início às 08h e janelas completas. Esclareça o horário."),
-                        _ => AgentToolResult.ConflictResult("Edição recusada. Releia o agendamento e revise versão, estado, dados e conflitos.")
+                        EstadoEdicaoAgendamento.RequerEsclarecimento => AgentToolResult.Missing("Esse serviço reserva dias completos, das 08h às 18h. Podemos iniciar às 08h?"),
+                        _ => AgentToolResult.ConflictResult("Não consegui alterar o agendamento: os dados podem ter mudado ou há conflito de horário. Consulte a agenda e revise o pedido.")
                     };
                 }
                 else result = AgentToolResult.ConflictResult("Cancelamento exige confirmação explícita vinculada ao desafio.");
@@ -396,14 +403,16 @@ public sealed class AgendaAgentApplication(
 
     private async Task<AgentToolResult> DisponibilidadeAsync(VerificarDisponibilidadeToolRequest r, CancellationToken ct)
     {
-        if (r.Data is null || r.Duracao is null || !TryEnum<UnidadeDuracao>(r.UnidadeDuracao, out var unidade))
-            return AgentToolResult.Missing("Informe data, duração e unidade Minutos ou DiasCorridos.");
+        if (r.Data is null) return AgentToolResult.Missing("Qual data deseja verificar?");
+        if (r.Duracao is null) return AgentToolResult.Missing("Por quanto tempo você precisa reservar?");
+        if (!TryEnum<UnidadeDuracao>(r.UnidadeDuracao, out var unidade))
+            return AgentToolResult.Missing("Essa duração é em minutos ou dias corridos?");
         var result = await disponibilidade.VerificarAsync(new(r.Data.Value, r.Horario, r.Duracao.Value, unidade), ct);
         return result.Estado switch
         {
             EstadoDisponibilidadeAgenda.Disponivel => AgentToolResult.Succeeded("Disponível: " + string.Join("; ", result.Periodos.Take(14).Select(p => $"{p.Data:dd/MM/yyyy} {p.Inicio:HH:mm}–{p.Fim:HH:mm}"))),
             EstadoDisponibilidadeAgenda.Indisponivel => AgentToolResult.ConflictResult("Período ocupado. Escolha outro horário/data."),
-            EstadoDisponibilidadeAgenda.RequerEsclarecimento => AgentToolResult.Missing("DiasCorridos exige janelas completas 08h–18h; esclareça o início."),
+            EstadoDisponibilidadeAgenda.RequerEsclarecimento => AgentToolResult.Missing("Esse serviço reserva dias completos, das 08h às 18h. Podemos iniciar às 08h?"),
             _ => AgentToolResult.Missing("Informe horário dentro de 08h–18h e duração positiva.")
         };
     }
@@ -431,7 +440,11 @@ public sealed class AgendaAgentApplication(
         if (plan.Resposta == DialogueReply.ExplicarPedido && pergunta is not null)
             return AgentToolResult.Missing("Esses dados são necessários para reservar o serviço corretamente. " + pergunta.Message);
         if (pergunta is not null && (plan.Objetivo is DialogueGoal.CriarAgendamento or DialogueGoal.Continuar || plan.Resposta == DialogueReply.Coletar))
-            return turn.CatalogResult is { } catalogo ? pergunta with { Message = pergunta.Message + "\n" + catalogo.Message } : pergunta;
+            return turn.CatalogResult is { } catalogo ? pergunta with
+            {
+                Message = pergunta.Message + "\n" + catalogo.Message,
+                RedacoesPermitidas = pergunta.RedacoesPermitidas?.Select(s => s + "\n" + catalogo.Message).ToArray()
+            } : pergunta;
         return turn.PendingResult ?? turn.LastResult ?? pergunta ?? AgentToolResult.Missing("Qual informação da agenda você deseja consultar ou organizar?");
     }
     private async Task<AgentToolResult> EsclarecerAsync(CancellationToken ct)
@@ -466,11 +479,37 @@ public sealed class AgendaAgentApplication(
             : string.Join("; ", periodos.Select(p => $"{p.Data:dd/MM/yyyy} {p.Inicio:HH:mm}–{p.Fim:HH:mm}"));
         var endereco = a.EnderecoServico is null ? "" : $"\nEndereço: {a.EnderecoServico}.";
         var observacoes = string.IsNullOrWhiteSpace(a.Observacoes) ? "" : $"\nObservações: {a.Observacoes}";
-        return AgentToolResult.Succeeded($"{titulo}: {a.TipoServicoNome} para {a.ClienteNome}, {datas}.\n{Duracao(a.Duracao, a.UnidadeDuracao)} — {horarios}.{endereco}{observacoes}");
+        var details = $"{a.TipoServicoNome} para {a.ClienteNome}, {datas}.\n{Duracao(a.Duracao, a.UnidadeDuracao)} – {horarios}.{endereco}{observacoes}";
+        var introduction = titulo switch
+        {
+            "Agendamento criado" => "Pronto, ficou agendado: ",
+            "Agendamento atualizado" => "Atualizei o agendamento: ",
+            "Agendamento concluído" => "Marquei como concluído: ",
+            "Agendamento cancelado" => "O agendamento foi cancelado: ",
+            _ => null
+        };
+        return AgentToolResult.Succeeded($"{titulo}: {details}") with
+        {
+            RedacoesPermitidas = introduction is null ? null : [introduction + details]
+        };
     }
     private static string Duracao(int valor, UnidadeDuracao unidade) => unidade == UnidadeDuracao.DiasCorridos
         ? $"{valor} {(valor == 1 ? "dia corrido" : "dias corridos")}" : $"{valor} minutos";
-    private static AgentToolResult Missing(IReadOnlyList<string> fields) => AgentToolResult.Missing("Informe: " + string.Join(", ", fields) + ".");
+    private static string[] CollectionQuestions(string field) => field switch
+    {
+        "nome do cliente" or "nome" => ["Qual é o nome do cliente?", "Pode me dizer o nome do cliente?"],
+        "telefone com DDD" or "telefone" => ["Qual é o telefone com DDD do cliente?", "Pode me passar o telefone do cliente com DDD?"],
+        "serviço desejado" => ["Qual serviço você deseja agendar?", "Que serviço você quer marcar?"],
+        "data" => ["Para qual data você quer agendar?", "Em que dia você precisa do serviço?"],
+        "horário" => ["Qual horário você prefere?", "A que horas você quer iniciar o serviço?"],
+        "endereço do serviço" or "endereço principal" => ["Qual é o endereço do serviço?", "Em qual endereço será o serviço?"],
+        _ => [$"Pode informar {field} para continuarmos?"]
+    };
+    private static AgentToolResult Missing(IReadOnlyList<string> fields)
+    {
+        var questions = CollectionQuestions(fields[0]);
+        return AgentToolResult.Missing(questions[0]) with { RedacoesPermitidas = questions.Skip(1).ToArray() };
+    }
     private static bool TryEnum<T>(string? value, out T parsed) where T : struct, Enum =>
         Enum.TryParse(value, true, out parsed) && Enum.IsDefined(parsed) && Enum.GetNames<T>().Contains(value, StringComparer.OrdinalIgnoreCase);
 }

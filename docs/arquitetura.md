@@ -442,8 +442,15 @@ nessa primeira chamada. Objetivo CriarAgendamento registra a intenção incomple
 antes de consultar o catálogo; a primeira Tool escolhida não define o objetivo.
 Na execução MAF, Tools usam Auto e retornam resultados ao agente em sequência.
 O modelo escolhe o ato de diálogo final (coletar, explicar catálogo/pedido,
-resultado ou esclarecer), que o backend compõe com fatos verificados. Prosa livre
-ou plano inválido não atestam escrita. Não há classificador por palavras exatas.
+resultado ou esclarecer), que o backend compõe com fatos verificados. A #101
+acrescenta redação no mesmo retorno final: o Gemini escolhe frases de coleta e
+resumos naturais oferecidos pelo backend, podendo usar conectivos neutros.
+AgentResponseComposer aceita somente a mensagem integral ou uma alternativa
+confiável integral; status, datas, IDs, recusas e códigos não são reescritos.
+Redação vazia, inválida, excessiva ou falha do modelo usa fallback determinístico,
+sem chamada extra, repetição de escrita ou nova redação de resposta persistida.
+A coleta pede um dado ausente por vez sem apagar os demais campos pendentes.
+Prosa livre ou plano inválido não atestam escrita. Não há classificador por palavras exatas.
 
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
