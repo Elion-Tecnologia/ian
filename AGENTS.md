@@ -79,7 +79,9 @@ As quatro migrations históricas devem permanecer intactas. As migrations da
 validação; qualquer migration posterior continua exigindo autorização específica.
 #30 implementa o motor de ocupações no Domain; #31 integra a criação transacional;
 #32 integra consultas e disponibilidade; #33 integra edição/reagendamento
-transacional com versão esperada e seleção explícita; #35 integrará estados.
+transacional com versão esperada e seleção explícita; #35 integra conclusão e
+cancelamento confirmado pela #22, inativando reservas pelo estado terminal e
+preservando períodos planejados como histórico.
 Testes de infraestrutura não comprovam esses fluxos funcionais.
 Testes PostgreSQL exigem conexão descartável local ian_t<numero>_tests e
 IAN_TEST_POSTGRES_DATABASE com o mesmo nome; nunca apontar para a origem

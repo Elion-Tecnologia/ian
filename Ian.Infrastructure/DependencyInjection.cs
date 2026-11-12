@@ -114,6 +114,8 @@ public static class DependencyInjection
         services.AddScoped<ICriacaoAgendamento, CriacaoAgendamentoApplication>();
         services.AddScoped<IAgendaEdicaoStore, PostgresAgendaEdicaoStore>();
         services.AddScoped<IEdicaoAgendamento, EdicaoAgendamentoApplication>();
+        services.AddScoped<IAgendaEncerramentoStore, PostgresAgendaEncerramentoStore>();
+        services.AddScoped<IEncerramentoAgendamento, EncerramentoAgendamentoApplication>();
         services.AddScoped<SelecaoEdicaoAgendamentoApplication>();
         services.AddScoped<IConsultaAgendaStore, PostgresConsultaAgendaStore>();
         services.AddScoped<IConsultaAgenda, ConsultaAgendaApplication>();
