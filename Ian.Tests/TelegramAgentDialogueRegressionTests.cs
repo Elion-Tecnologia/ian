@@ -61,7 +61,7 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.Contains("11:00", receipt);
         Assert.Contains("#1", receipt);
         Assert.DoesNotContain("Maria", receipt);
-        Assert.Equal(15, simulation.Calls); // Three social calls; the explicit hour is captured without Gemini.
+        Assert.Equal(15, simulation.Calls); // Three social turns; the explicit hour is captured without Gemini.
         var calls = simulation.Calls;
         f.Restart();
         await f.HandleAgainAsync(8);
@@ -80,7 +80,7 @@ public sealed partial class TelegramAgentPostgresTests
     }
 
     [PostgresFact]
-    public async Task PerguntaNaturalSemPlanoNaoPerdeIntencaoExplicitaNemInventaDuracao()
+    public async Task InterpretacaoEstruturadaPreservaIntencaoExplicitaENaoInventaDuracao()
     {
         await using var f = await Fixture.CreateAsync();
         f.Clock.Set(new DateTimeOffset(2030, 1, 8, 1, 30, 0, TimeSpan.Zero));
@@ -88,8 +88,8 @@ public sealed partial class TelegramAgentPostgresTests
         simulation.RawCreationQuestion = true;
         await f.SendAsync(1, "Quero agendar pro restante do dia de hoje");
         Assert.Contains("cliente", f.Transport.Replies[^1]);
-        Assert.Equal(1, simulation.Calls);
-        Assert.Empty(simulation.Tools);
+        Assert.Equal(3, simulation.Calls);
+        Assert.Equal(new[] { "criar_agendamento" }, simulation.Tools);
         await using var db = PostgresTestDatabase.CreateContext();
         var pending = await db.SolicitacoesPendentes.SingleAsync();
         Assert.Contains("CriarAgendamento", pending.Operacao);
@@ -191,19 +191,21 @@ public sealed partial class TelegramAgentPostgresTests
             if (!root.TryGetProperty("tools", out _))
             {
                 var config = root.GetProperty("generationConfig");
-                Assert.False(config.TryGetProperty("responseJsonSchema", out _));
+                Assert.Equal("application/json", config.GetProperty("responseMimeType").GetString());
+                Assert.True(config.TryGetProperty("responseJsonSchema", out _));
                 Assert.Equal("MINIMAL", config.GetProperty("thinkingConfig").GetProperty("thinkingLevel").GetString());
                 if (state.Failure == "provider") return new(HttpStatusCode.ServiceUnavailable)
                     { Content = new StringContent("{\"error\":{\"code\":503,\"message\":\"PRIVATE_PROVIDER_BODY\",\"status\":\"UNAVAILABLE\"}}") };
                 if (state.Failure == "timeout") throw new OperationCanceledException("PRIVATE_TIMEOUT");
                 if (state.Failure == "invalid") return Text("{invalid PRIVATE_JSON}");
                 if (state.Failure == "limit") return Text("", "MAX_TOKENS");
-                if (state.RawCreationQuestion && text.Contains("Quero agendar")) return Text("Como se chama o cliente?");
-                if (text == "Olá") return Text("Olá! Como posso ajudar?");
-                if (text == "Oi IAN tudo bem?") return Text("Tudo bem por aqui! E com você?");
-                if (text == "Tá aí?") return Text("Estou aqui, pode falar!");
-                return Text(JsonSerializer.Serialize(new AgentDialoguePlan(text.Contains("Quero agendar") ? DialogueGoal.CriarAgendamento
-                    : text.Contains("Tenho") ? DialogueGoal.Consulta : DialogueGoal.Continuar, DialogueReply.Coletar), AgentRequestJson.Options));
+                if (state.RawCreationQuestion && text.Contains("Quero agendar"))
+                    return Dialogue(new AgentDialoguePlan(DialogueGoal.CriarAgendamento, DialogueReply.Coletar));
+                if (text == "Olá") return Dialogue(new AgentDialoguePlan(DialogueGoal.Conversa, DialogueReply.Esclarecer) { Texto = "Olá! Como posso ajudar?" });
+                if (text == "Oi IAN tudo bem?") return Dialogue(new AgentDialoguePlan(DialogueGoal.Conversa, DialogueReply.Esclarecer) { Texto = "Tudo bem por aqui! E com você?" });
+                if (text == "Tá aí?") return Dialogue(new AgentDialoguePlan(DialogueGoal.Conversa, DialogueReply.Esclarecer) { Texto = "Estou aqui, pode falar!" });
+                return Dialogue(new AgentDialoguePlan(text.Contains("Quero agendar") ? DialogueGoal.CriarAgendamento
+                    : text.Contains("Tenho") ? DialogueGoal.Consulta : DialogueGoal.Continuar, DialogueReply.Coletar));
             }
             if (feedback.Length == 0)
             {
@@ -227,6 +229,7 @@ public sealed partial class TelegramAgentPostgresTests
             state.Tools.Add(name);
             return Response(new { functionCall = new { name, args } });
         }
+        private static HttpResponseMessage Dialogue(AgentDialoguePlan plan) => Text(JsonSerializer.Serialize(plan, AgentRequestJson.Options));
         private static HttpResponseMessage Text(string text, string reason = "STOP") => Response(new { text }, reason);
         private static HttpResponseMessage Response(object part, string reason = "STOP") => new(HttpStatusCode.OK)
         {

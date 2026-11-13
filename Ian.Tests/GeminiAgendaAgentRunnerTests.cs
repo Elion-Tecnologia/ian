@@ -2,6 +2,7 @@ using Ian.Application.AI;
 using Ian.Infrastructure.AI;
 using Ian.Infrastructure.Telegram;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Ian.Tests;
@@ -60,6 +61,24 @@ public sealed class GeminiAgendaAgentRunnerTests
         Assert.Equal(0, backend.Calls);
     }
 
+    [Fact]
+    public async Task ConteudoSemTextoRecebeDiagnosticoSeguro()
+    {
+        const string privateReasoning = "SYNTHETIC_PRIVATE_REASONING";
+        var logger = new CapturingLogger();
+        var client = new FixedResponseClient(new ChatResponse(new ChatMessage(ChatRole.Assistant,
+            [new TextReasoningContent(privateReasoning)])) { FinishReason = ChatFinishReason.Stop });
+        var result = await new GeminiAgendaAgentRunner(
+            Options.Create(new GeminiOptions { ApiKey = "synthetic-key", Model = "gemini-3.1-flash-lite" }),
+            () => client,
+            new AgentToolRegistry(new Backend(), Options.Create(new TelegramOptions { AdministratorUserId = 42 }), new AgentExecutionBudget()),
+            logger: logger).RunAsync("Prompt sintético.", Caller());
+
+        Assert.Equal(AiModelFailure.InvalidResponse, result.Failure);
+        Assert.Contains(logger.Messages, message => message.Contains("reason=NonTextContent", StringComparison.Ordinal));
+        Assert.DoesNotContain(privateReasoning, string.Join('\n', logger.Messages));
+    }
+
     private sealed class SlowClient : IChatClient
     {
         public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
@@ -72,6 +91,25 @@ public sealed class GeminiAgendaAgentRunnerTests
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
         public void Dispose() { }
+    }
+
+    private sealed class FixedResponseClient(ChatResponse response) : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            CancellationToken cancellationToken = default) => Task.FromResult(response);
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public void Dispose() { }
+    }
+
+    private sealed class CapturingLogger : ILogger<GeminiAgendaAgentRunner>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
     }
 
     private static AgentToolCaller Caller() => new(42, 42, true, true, true);

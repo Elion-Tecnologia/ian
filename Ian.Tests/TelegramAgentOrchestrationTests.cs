@@ -218,7 +218,9 @@ public sealed partial class TelegramAgentPostgresTests
                 return new(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("{}") };
             if (planning)
             {
-                Assert.False(root.GetProperty("generationConfig").TryGetProperty("responseJsonSchema", out _));
+                var generationConfig = root.GetProperty("generationConfig");
+                Assert.Equal("application/json", generationConfig.GetProperty("responseMimeType").GetString());
+                Assert.True(generationConfig.TryGetProperty("responseJsonSchema", out _));
                 Assert.True(root.GetProperty("generationConfig").GetProperty("maxOutputTokens").GetInt32() >= 2048);
                 if (state.Failure == "invented_success") return Text("PRIVATE_INVENTED_SUCCESS: Agendamento criado.");
                 var goal = text.Contains("Queria") || text.Contains("Gostaria") || text.Contains("Preciso") ? "CriarAgendamento" : "Continuar";
@@ -230,6 +232,7 @@ public sealed partial class TelegramAgentPostgresTests
                 }
                 return Plan(goal, reply);
             }
+            Assert.False(root.GetProperty("generationConfig").TryGetProperty("responseJsonSchema", out _));
             Assert.NotEqual("ANY", root.TryGetProperty("toolConfig", out var config) ? config.GetProperty("functionCallingConfig").GetProperty("mode").GetString() : "AUTO");
             if (text.Contains("isto")) return state.ClarificationTool && feedback.Length == 0
                 ? Call("esclarecer_pedido", new { }) : Plan("Continuar", "ExplicarCatalogo");

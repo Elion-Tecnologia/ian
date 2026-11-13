@@ -6,6 +6,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Ian.Infrastructure.AI;
 
@@ -40,20 +41,33 @@ public sealed class GeminiAgendaAgentRunner(
                 new ChatOptions { ModelId = options.Value.Model, ToolMode = ChatToolMode.None, MaxOutputTokens = 2048,
                     RawRepresentationFactory = _ => new GenerateContentConfig
                     {
+                        ResponseMimeType = "application/json",
+                        ResponseJsonSchema = JsonNode.Parse(InterpretationJsonSchema),
                         ThinkingConfig = options.Value.Model.StartsWith("gemini-3.1-flash-lite", StringComparison.Ordinal)
                             ? new ThinkingConfig { ThinkingLevel = ThinkingLevel.Minimal } : null
                     }
                 }, timeout.Token);
             logger?.LogInformation("Update {UpdateId} stage=model_interpret_received finish={Finish} output_tokens={OutputTokens}.",
                 context?.UpdateId, Finish(interpretation.FinishReason), interpretation.Usage?.OutputTokenCount);
-            var plan = interpretation.FinishReason is { } reason && reason != ChatFinishReason.Stop ||
-                interpretation.Messages.SelectMany(m => m.Contents).Any(c => c is FunctionCallContent)
-                ? null : AgentDialoguePlan.Parse(interpretation.Text) ??
-                    (AgentResponseComposer.IsSafeNaturalText(interpretation.Text)
-                        ? new AgentDialoguePlan(DialogueGoal.Conversa, DialogueReply.Esclarecer) { Texto = interpretation.Text } : null);
+            var contents = interpretation.Messages.SelectMany(m => m.Contents).ToArray();
+            var hasTextContent = contents.Any(content => content is TextContent);
+            var hasNonTextContent = contents.Any(content => content is not TextContent);
+            var parsedPlan = interpretation.FinishReason is { } reason && reason != ChatFinishReason.Stop
+                ? new AgentDialoguePlanParseResult(null, AgentDialoguePlanParseFailure.UnexpectedFormat)
+                : string.IsNullOrWhiteSpace(interpretation.Text)
+                    ? new AgentDialoguePlanParseResult(null, hasNonTextContent
+                        ? AgentDialoguePlanParseFailure.NonTextContent
+                        : AgentDialoguePlanParseFailure.EmptyResponse)
+                    : !hasTextContent
+                        ? new AgentDialoguePlanParseResult(null, AgentDialoguePlanParseFailure.NonTextContent)
+                        : contents.Any(content => content is FunctionCallContent)
+                            ? new AgentDialoguePlanParseResult(null, AgentDialoguePlanParseFailure.NonTextContent)
+                        : AgentDialoguePlan.ParseDetailed(interpretation.Text);
+            var plan = parsedPlan.Plan;
             if (plan is null)
             {
-                logger?.LogWarning("Update {UpdateId} stage=model_interpret_invalid.", context?.UpdateId);
+                logger?.LogWarning("Update {UpdateId} stage=model_interpret_invalid reason={Reason}.",
+                    context?.UpdateId, parsedPlan.Failure);
                 return Fail(AiModelFailure.InvalidResponse);
             }
             logger?.LogInformation("Update {UpdateId} stage=model_interpreted goal={Goal} reply={Reply}.", context?.UpdateId, plan.Objetivo, plan.Resposta);
@@ -111,5 +125,18 @@ public sealed class GeminiAgendaAgentRunner(
     }
     private static string Finish(ChatFinishReason? reason) => reason == ChatFinishReason.Stop ? "Stop"
         : reason == ChatFinishReason.Length ? "TokenLimit" : reason == ChatFinishReason.ToolCalls ? "ToolCalls" : "Other";
+
+    private const string InterpretationJsonSchema = """
+        {
+          "type": "object",
+          "properties": {
+            "objetivo": { "type": "string", "enum": ["CriarAgendamento", "Continuar", "Consulta", "Conversa"] },
+            "resposta": { "type": "string", "enum": ["Coletar", "ExplicarCatalogo", "ExplicarPedido", "Resultado", "Esclarecer"] },
+            "texto": { "type": "string" }
+          },
+          "required": ["objetivo", "resposta"],
+          "additionalProperties": false
+        }
+        """;
 
 }
