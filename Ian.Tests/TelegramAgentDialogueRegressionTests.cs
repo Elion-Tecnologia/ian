@@ -61,7 +61,7 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.Contains("11:00", receipt);
         Assert.Contains("#1", receipt);
         Assert.DoesNotContain("Maria", receipt);
-        Assert.Equal(15, simulation.Calls); // Three social calls; the explicit hour is captured without Gemini.
+        Assert.Equal(17, simulation.Calls); // Structured interpretation and Tool collection preserve the pending request.
         var calls = simulation.Calls;
         f.Restart();
         await f.HandleAgainAsync(8);
@@ -80,7 +80,7 @@ public sealed partial class TelegramAgentPostgresTests
     }
 
     [PostgresFact]
-    public async Task PerguntaNaturalSemPlanoNaoPerdeIntencaoExplicitaNemInventaDuracao()
+    public async Task InterpretacaoEstruturadaPreservaIntencaoExplicitaENaoInventaDuracao()
     {
         await using var f = await Fixture.CreateAsync();
         f.Clock.Set(new DateTimeOffset(2030, 1, 8, 1, 30, 0, TimeSpan.Zero));
@@ -88,8 +88,8 @@ public sealed partial class TelegramAgentPostgresTests
         simulation.RawCreationQuestion = true;
         await f.SendAsync(1, "Quero agendar pro restante do dia de hoje");
         Assert.Contains("cliente", f.Transport.Replies[^1]);
-        Assert.Equal(1, simulation.Calls);
-        Assert.Empty(simulation.Tools);
+        Assert.Equal(3, simulation.Calls);
+        Assert.Equal(new[] { "criar_agendamento" }, simulation.Tools);
         await using var db = PostgresTestDatabase.CreateContext();
         var pending = await db.SolicitacoesPendentes.SingleAsync();
         Assert.Contains("CriarAgendamento", pending.Operacao);
@@ -200,7 +200,7 @@ public sealed partial class TelegramAgentPostgresTests
                 if (state.Failure == "invalid") return Text("{invalid PRIVATE_JSON}");
                 if (state.Failure == "limit") return Text("", "MAX_TOKENS");
                 if (state.RawCreationQuestion && text.Contains("Quero agendar"))
-                    return Dialogue(new AgentDialoguePlan(DialogueGoal.CriarAgendamento, DialogueReply.Coletar) { Texto = "Como se chama o cliente?" });
+                    return Dialogue(new AgentDialoguePlan(DialogueGoal.CriarAgendamento, DialogueReply.Coletar));
                 if (text == "Olá") return Dialogue(new AgentDialoguePlan(DialogueGoal.Conversa, DialogueReply.Esclarecer) { Texto = "Olá! Como posso ajudar?" });
                 if (text == "Oi IAN tudo bem?") return Dialogue(new AgentDialoguePlan(DialogueGoal.Conversa, DialogueReply.Esclarecer) { Texto = "Tudo bem por aqui! E com você?" });
                 if (text == "Tá aí?") return Dialogue(new AgentDialoguePlan(DialogueGoal.Conversa, DialogueReply.Esclarecer) { Texto = "Estou aqui, pode falar!" });
