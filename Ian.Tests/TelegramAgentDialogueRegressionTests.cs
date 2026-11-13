@@ -61,7 +61,7 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.Contains("11:00", receipt);
         Assert.Contains("#1", receipt);
         Assert.DoesNotContain("Maria", receipt);
-        Assert.Equal(17, simulation.Calls); // Structured interpretation and Tool collection preserve the pending request.
+        Assert.Equal(15, simulation.Calls); // Three social turns; the explicit hour is captured without Gemini.
         var calls = simulation.Calls;
         f.Restart();
         await f.HandleAgainAsync(8);
