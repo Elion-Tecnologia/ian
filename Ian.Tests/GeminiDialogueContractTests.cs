@@ -11,7 +11,7 @@ namespace Ian.Tests;
 public sealed class GeminiDialogueContractTests
 {
     [Fact]
-    public async Task ConversaUsaSdkSemSchemaObrigatorioESemSegundaChamada()
+    public async Task InterpretacaoUsaSchemaEstruturadoSemAlterarCicloDeTools()
     {
         var handler = new ContractHttp();
         using var http = new HttpClient(handler);
@@ -28,6 +28,25 @@ public sealed class GeminiDialogueContractTests
         public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken = default) =>
             Task.FromResult(AgentToolResult.Missing("Como posso ajudar com sua agenda?"));
     }
+    [Theory]
+    [InlineData("{\"objetivo\":\"Conversa\",\"resposta\":\"Esclarecer\",\"texto\":\"Oi\"}", AgentDialoguePlanParseFailure.None)]
+    [InlineData("{\"objetivo\":\"Consulta\",\"resposta\":\"Resultado\"}", AgentDialoguePlanParseFailure.None)]
+    [InlineData("{\"objetivo\":\"Conversa\",\"texto\":\"Oi\"}", AgentDialoguePlanParseFailure.MissingProperties)]
+    [InlineData("{\"objetivo\":\"Conversa\"}", AgentDialoguePlanParseFailure.MissingProperties)]
+    [InlineData("{broken", AgentDialoguePlanParseFailure.InvalidJson)]
+    [InlineData("Uma resposta em prosa", AgentDialoguePlanParseFailure.UnexpectedFormat)]
+    [InlineData("{\"objetivo\":\"Conversar\",\"resposta\":\"Social\"}", AgentDialoguePlanParseFailure.InvalidEnum)]
+    [InlineData("{\"objetivo\":1,\"resposta\":\"Esclarecer\"}", AgentDialoguePlanParseFailure.UnexpectedFormat)]
+    [InlineData("{\"objetivo\":\"Conversa\",\"resposta\":\"Esclarecer\",\"texto\":{}}", AgentDialoguePlanParseFailure.UnexpectedFormat)]
+    [InlineData("[]", AgentDialoguePlanParseFailure.UnexpectedFormat)]
+    [InlineData("", AgentDialoguePlanParseFailure.EmptyResponse)]
+    public void ParserClassificaContratoSemExporConteudo(string response, AgentDialoguePlanParseFailure expected)
+    {
+        var parsed = AgentDialoguePlan.ParseDetailed(response);
+        Assert.Equal(expected, parsed.Failure);
+        Assert.Equal(expected == AgentDialoguePlanParseFailure.None, parsed.Plan is not null);
+    }
+
     private sealed class ContractHttp : HttpMessageHandler
     {
         public int Calls { get; private set; }
@@ -36,8 +55,14 @@ public sealed class GeminiDialogueContractTests
             using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
             Calls++;
             var config = json.RootElement.GetProperty("generationConfig");
-            Assert.False(config.TryGetProperty("responseJsonSchema", out _));
-            Assert.False(config.TryGetProperty("responseMimeType", out _));
+            Assert.Equal("application/json", config.GetProperty("responseMimeType").GetString());
+            var schema = config.GetProperty("responseJsonSchema");
+            Assert.Equal("object", schema.GetProperty("type").GetString());
+            Assert.Equal(new[] { "objetivo", "resposta" }, schema.GetProperty("required").EnumerateArray().Select(value => value.GetString()).ToArray());
+            Assert.Equal(new[] { "CriarAgendamento", "Continuar", "Consulta", "Conversa" },
+                schema.GetProperty("properties").GetProperty("objetivo").GetProperty("enum").EnumerateArray().Select(value => value.GetString()).ToArray());
+            Assert.Equal(new[] { "Coletar", "ExplicarCatalogo", "ExplicarPedido", "Resultado", "Esclarecer" },
+                schema.GetProperty("properties").GetProperty("resposta").GetProperty("enum").EnumerateArray().Select(value => value.GetString()).ToArray());
             Assert.Equal(2048, config.GetProperty("maxOutputTokens").GetInt32());
             Assert.Equal("MINIMAL", config.GetProperty("thinkingConfig").GetProperty("thinkingLevel").GetString());
             Assert.False(json.RootElement.TryGetProperty("tools", out _));
