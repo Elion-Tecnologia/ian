@@ -84,6 +84,8 @@ public sealed partial class AgendaTelegramHandler(
                 return AgentToolResult.ConflictResult("ID fora dos candidatos apresentados. Selecione explicitamente um dos IDs.");
             return await backend.RetomarSelecaoAsync(ct);
         }
+        if (CreationStatusText().IsMatch(PendingTurnDataCapture.Normalize(text)))
+            return await backend.EstadoCriacaoAsync(ct);
         if (await backend.CapturePendingReplyAsync(ct) is { } captured)
         {
             logger?.LogInformation("Update {UpdateId} stage={Stage} outcome={Outcome} field={Field} next_topic={NextTopic}.",
@@ -138,7 +140,7 @@ public sealed partial class AgendaTelegramHandler(
             return AgentToolResult.Missing("Oi! Estou por aqui. Como posso ajudar?") with { DialogueMode = AgentDialogueMode.Social };
         }
         // A provider/wording failure is not evidence that a committed operation failed.
-        var safe = context.MutationResult ?? context.PendingResult ?? context.LastResult;
+        var safe = context.MutationResult ?? context.QueryResult ?? context.PendingResult ?? context.LastResult;
         if (safe is null && pending is not null)
             safe = await backend.ComposeDialogueAsync(new(DialogueGoal.Continuar, DialogueReply.Coletar), ct);
         if (safe is null && pending is null && SchedulingText().IsMatch(text))
@@ -168,6 +170,8 @@ public sealed partial class AgendaTelegramHandler(
     private static partial Regex SchedulingText();
     [GeneratedRegex(@"^confirmar\s+([a-fA-F0-9-]{32,36})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ConfirmText();
+    [GeneratedRegex(@"^(?:(?:o|meu)\s+)?(?:servico|agendamento|pedido)\s+(?:(?:ja\s+)?foi\s+(?:agendado|criado|salvo)|(?:esta|ficou)\s+agendado)[?!.]*$", RegexOptions.CultureInvariant)]
+    private static partial Regex CreationStatusText();
     [GeneratedRegex(@"^(?:(cliente|agendamento|serviço|servico)\s+)?#?(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SelectText();
 }

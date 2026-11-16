@@ -49,6 +49,15 @@ public sealed class PostgresAgentTurnStore(IanDbContext db, NpgsqlDataSource dat
         db.TelegramBusinessOperations.AsNoTracking().Where(o => o.UpdateId == updateId && o.AgendamentoId != null)
             .Select(o => o.AgendamentoId).FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<CreationAttempt?> GetLastCreationAsync(long userId, long beforeUpdateId, CancellationToken cancellationToken)
+    {
+        var updateId = await db.Set<TelegramAgentTurn>().AsNoTracking()
+            .Where(t => t.TelegramUserId == userId && t.UpdateId < beforeUpdateId && t.CommandJson != null &&
+                EF.Functions.JsonContains(t.CommandJson, "{\"$type\":\"criar\"}"))
+            .OrderByDescending(t => t.UpdateId).Select(t => (long?)t.UpdateId).FirstOrDefaultAsync(cancellationToken);
+        return updateId is { } id ? new(id, await GetCommittedAppointmentAsync(id, cancellationToken)) : null;
+    }
+
     public async Task<StoredConfirmation?> GetConfirmationAsync(long userId, long pendingId, CancellationToken cancellationToken)
     {
         var json = await db.SolicitacoesPendentes.AsNoTracking()

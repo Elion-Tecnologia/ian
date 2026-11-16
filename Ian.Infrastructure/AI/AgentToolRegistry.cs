@@ -40,9 +40,9 @@ public sealed class AgentToolRegistry(
                 "localizar_cliente", "Localiza clientes por nome ou telefone, sem selecionar automaticamente entre vários IDs."),
             AIFunctionFactory.Create((CancellationToken ct = default) => InvokeAsync(new ListarServicosToolRequest(), caller, ct),
                 "listar_servicos", "Lista IDs e padrões reais dos serviços disponíveis. Nunca invente um ID."),
-            AIFunctionFactory.Create((DateOnly? dataInicial = null, DateOnly? dataFinal = null, long? clienteId = null, long? agendamentoId = null, CancellationToken ct = default) =>
-                InvokeAsync(new ConsultarAgendaToolRequest(dataInicial, dataFinal, clienteId, agendamentoId), caller, ct),
-                "consultar_agenda", "Consulta programação por dia/período ou ID de cliente/agendamento; dados reais e versão são validados pelo backend."),
+            AIFunctionFactory.Create((DateOnly? dataInicial = null, DateOnly? dataFinal = null, long? clienteId = null, long? agendamentoId = null, long? tipoServicoId = null, string? estado = null, CancellationToken ct = default) =>
+                InvokeAsync(new ConsultarAgendaToolRequest(dataInicial, dataFinal, clienteId, agendamentoId, tipoServicoId, estado), caller, ct),
+                "consultar_agenda", "Consulta programação por dia/período local America/Sao_Paulo ou ID de cliente/agendamento, combinando tipoServicoId e estado (Agendado, Concluido ou Cancelado). Sem estado, retorna todos; datas em yyyy-MM-dd. Dados reais e versão são validados pelo backend."),
             AIFunctionFactory.Create((DateOnly? data = null, TimeOnly? horario = null, int? duracao = null, string? unidadeDuracao = null, CancellationToken ct = default) =>
                 InvokeAsync(new VerificarDisponibilidadeToolRequest(data, horario, duracao, unidadeDuracao), caller, ct),
                 "verificar_disponibilidade", "Verifica ocupações reais. Unidade: Minutos ou DiasCorridos. DiasCorridos exige 08h–18h em cada data."),
@@ -107,7 +107,7 @@ public sealed class AgentToolRegistry(
     {
         CadastrarClienteToolRequest x => Long(x.Nome, 200) || Long(x.EnderecoPrincipal, 2000) || InvalidPhone(x.Telefone),
         LocalizarClienteToolRequest x => Long(x.Nome, 200) || InvalidPhone(x.Telefone),
-        ConsultarAgendaToolRequest x => x.ClienteId is <= 0 || x.AgendamentoId is <= 0 || x.DataFinal < x.DataInicial ||
+        ConsultarAgendaToolRequest x => x.ClienteId is <= 0 || x.AgendamentoId is <= 0 || x.TipoServicoId is <= 0 || x.DataFinal < x.DataInicial ||
             x.DataInicial is { } a && x.DataFinal is { } b && b.DayNumber - a.DayNumber > 31,
         CriarAgendamentoToolRequest x => x.TipoServicoId is <= 0 || x.ClienteId is <= 0 || x.Duracao is <= 0 or > 720 ||
             Long(x.NomeCliente, 200) || InvalidPhone(x.TelefoneCliente) || Long(x.EnderecoServico, 2000) || Long(x.Observacoes, 2000),
