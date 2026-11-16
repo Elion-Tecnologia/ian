@@ -15,14 +15,23 @@ public static partial class PendingTurnDataCapture
             !pending.CollectedFields.TryGetValue("request", out var json) ||
             AgentRequestJson.Deserialize(json) is not CriarAgendamentoToolRequest) return null;
         var input = Extract(text, utcNow ?? DateTimeOffset.UtcNow,
-            pending.MissingFields.FirstOrDefault()?.StartsWith("nome", StringComparison.OrdinalIgnoreCase) == true);
+            pending.MissingFields.FirstOrDefault()?.StartsWith("nome", StringComparison.OrdinalIgnoreCase) == true,
+            ExpectingAddress(pending));
         return input.HasFields ? input.Request : null;
     }
 
     // Remaining text is kept so collecting a phone never swallows an address or another command.
-    public static ScheduleInput Extract(string text, DateTimeOffset utcNow, bool expectingName = false)
+    public static ScheduleInput Extract(string text, DateTimeOffset utcNow, bool expectingName = false, bool expectingAddress = false)
     {
         if (IsNonCollectionInput(text)) return new(Empty(), text);
+        // Only a direct reply to the address question is consumed. Do this before date/phone
+        // extraction: street names and house numbers are address data, not scheduling fields.
+        if (expectingAddress && text.Trim().Length is > 0 and <= 2000 && DirectAddress().Match(text.Trim()) is { Success: true } address)
+        {
+            var continuation = Extract(address.Groups["remaining"].Value, utcNow);
+            return continuation with { Request = continuation.Request with
+                { EnderecoServico = address.Groups["address"].Value.Trim().TrimEnd('.') } };
+        }
         var schedule = InitialSchedule(text, utcNow);
         var rest = text;
         if (schedule.Data is not null) rest = ExplicitDate().Replace(DayPhrase().Replace(rest, " "), " ");
@@ -55,6 +64,10 @@ public static partial class PendingTurnDataCapture
     }
 
     public static bool IsNonCollectionInput(string text) => UncertainOrQuery().IsMatch(text) || IsSimpleGreeting(text);
+
+    // Accept keys already persisted by SavePendingAsync (which removes non-ASCII letters).
+    public static bool ExpectingAddress(PendingConversationState? pending) =>
+        pending?.MissingFields.Any(field => field is "endereodoservio" or "endereoprincipal") == true;
 
     public static bool IsCollectionRemainder(string text) =>
         string.IsNullOrWhiteSpace(Fillers().Replace(text, " ").Trim(' ', '.', ',', ';', ':', '!', '-'));
@@ -111,6 +124,9 @@ public static partial class PendingTurnDataCapture
     public static bool IsCatalogRequest(string text) => CatalogRequest().IsMatch(text);
     private static CriarAgendamentoToolRequest Empty() => new(null, null, null, null, null, null, null, null);
 
+    [GeneratedRegex(@"^(?:(?:[ée]\s+)?na\s+|(?:o\s+)?endere[cç]o(?:\s+(?:[ée]|do servi[cç]o))?\s*[:=]?\s*)?(?<address>(?:rua|r\.|avenida|av\.|travessa|alameda|estrada|rodovia|pra[cç]a)\s+\S[^\r\n]*?)(?<remaining>(?:[,;.]\s*|\s+)(?:pode come[cç]ar|pode iniciar|come[cç]ando|[àa]s\b).*)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DirectAddress();
+
     [GeneratedRegex(@"\b(?:ou|talvez|se|não|nao|qual|quais|consultar|consulte|consulta|agenda|tenho|mostre|liste|listar|verifique|verificar|disponibilidade|cancelar|cancele)\b|[?]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UncertainOrQuery();
     [GeneratedRegex(@"(?<![\d/])(?:\+55\s*)?(?:\([1-9]\d\)|[1-9]\d)\s*[2-9]\d{3,4}[ -]?\d{4}(?!\d)", RegexOptions.CultureInvariant)]
@@ -143,6 +159,6 @@ public static partial class PendingTurnDataCapture
 
 public sealed record ScheduleInput(CriarAgendamentoToolRequest Request, string RemainingText)
 {
-    public bool HasFields => Request.NomeCliente is not null || Request.TelefoneCliente is not null || Request.Data is not null || Request.Horario is not null;
+    public bool HasFields => Request.NomeCliente is not null || Request.TelefoneCliente is not null || Request.Data is not null || Request.Horario is not null || Request.EnderecoServico is not null;
     public bool IsCompleteReply => PendingTurnDataCapture.IsCollectionRemainder(RemainingText);
 }

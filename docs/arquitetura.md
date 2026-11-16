@@ -507,6 +507,24 @@ A sequência real de 12/11/2026 e falhas simuladas são exercitadas em testes;
 esses testes não comprovam a semântica do Gemini real nem a causa de suas chamadas
 históricas. Não há migration, endpoint ou contrato HTTP novo na #107.
 
+A #111 captura respostas diretas de endereço de logradouro quando esse campo está
+faltando, antes de analisar números/datas do endereço. Uma continuação explícita
+de horário é coletada separadamente; respostas ambíguas continuam para interpretação.
+O endereço validado participa do merge conservador e da criação transacional
+existente, inclusive após reinício. Perguntas diretas como “O serviço foi agendado?”
+consultam o pedido pendente e o último comando de criação do ator no diário:
+somente o vínculo de operação efetivamente persistido permite confirmar criação.
+Sem commit, a resposta informa pendência ou ausência de criação confirmada;
+essa pergunta nunca executa o pedido.
+
+`consultar_agenda` aceita também `tipoServicoId` e `estado` opcionais
+(`Agendado`, `Concluido`, `Cancelado`), combinados com datas locais e IDs. Isso
+expõe filtros já existentes na #32, sem alterar o contrato HTTP ou o banco.
+O resultado da consulta intercalada prevalece sobre a coleta daquele turno e
+preserva a intenção pendente. O limite de 31 dias aplica-se ao intervalo informado;
+buscas por cliente/ID formatam as ocupações retornadas mesmo com datas distantes,
+mantendo o limite de registros e de tamanho da resposta Telegram.
+
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
 8 chamadas de Tools, 15 segundos por Tool e 60 segundos por execução. Prompts

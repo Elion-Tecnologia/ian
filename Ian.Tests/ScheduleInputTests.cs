@@ -9,6 +9,40 @@ public sealed class ScheduleInputTests
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-11-13T01:30:00Z");
 
     [Theory]
+    [InlineData("Rua Exemplo, 66", "Rua Exemplo, 66")]
+    [InlineData("É na Rua Fictícia.", "Rua Fictícia")]
+    [InlineData("Endereço: Avenida São João, 18/11, 13997209208", "Avenida São João, 18/11, 13997209208")]
+    public void EnderecoSolicitadoNaoViraTelefoneDataNomeOuServico(string text, string address)
+    {
+        var input = PendingTurnDataCapture.Extract(text, Now, expectingAddress: true);
+        Assert.Equal(address, input.Request.EnderecoServico);
+        Assert.Null(input.Request.NomeCliente);
+        Assert.Null(input.Request.TelefoneCliente);
+        Assert.Null(input.Request.Data);
+        Assert.True(input.IsCompleteReply);
+        Assert.True(input.HasFields);
+    }
+
+    [Theory]
+    [InlineData("O serviço foi agendado?")]
+    [InlineData("Consulte a Rua Exemplo, 66")]
+    [InlineData("Talvez Rua Exemplo, 66")]
+    [InlineData("Rua Exemplo, 66 ou Avenida B, 20")]
+    [InlineData("Oi")]
+    [InlineData("/descartar")]
+    public void PerguntasComandosOuEnderecoAmbiguoNaoSaoColeta(string text) =>
+        Assert.False(PendingTurnDataCapture.Extract(text, Now, expectingAddress: true).HasFields);
+
+    [Fact]
+    public void EnderecoComHorarioExplicitoPreservaAmbosSemIncorporarInstrucaoAoSnapshot()
+    {
+        var input = PendingTurnDataCapture.Extract("O endereço é Rua Fictícia, pode começar às 08h.", Now, expectingAddress: true);
+        Assert.Equal("Rua Fictícia", input.Request.EnderecoServico);
+        Assert.Equal(new TimeOnly(8, 0), input.Request.Horario);
+        Assert.True(input.IsCompleteReply);
+    }
+
+    [Theory]
     [InlineData("Gabriel Ramos. Vai ser na próxima segunda-feira às 9h da manhã o início", "Gabriel Ramos", false)]
     [InlineData("GABRIEL RAMOS, telefone (13) 99720-9208, na PROXIMA SEGUNDA-feira às 9h da manha", "GABRIEL RAMOS", true)]
     [InlineData("Nome: Gabriel Ramos; 13997209208; 16/11/2026 às 09:00", "Gabriel Ramos", true)]

@@ -21,6 +21,7 @@ public sealed class AgentTurnContext
     public bool WriteAttempted { get; set; }
     public AgentToolResult? PendingResult { get; set; }
     public AgentToolResult? LastResult { get; set; }
+    public AgentToolResult? QueryResult { get; set; }
     public AgentToolResult? MutationResult { get; set; }
     public AgentToolResult? ClarificationResult { get; set; }
     public AgentToolResult? CatalogResult { get; set; }
@@ -34,6 +35,7 @@ public sealed class AgentTurnContext
         WriteAttempted = false;
         PendingResult = null;
         LastResult = null;
+        QueryResult = null;
         MutationResult = null;
         ClarificationResult = null;
         CatalogResult = null;
@@ -46,12 +48,15 @@ public interface IAgentTurnStore
     Task<TelegramAgentTurn> GetOrCreateAsync(long updateId, long userId, CancellationToken cancellationToken);
     Task<bool> FreezeCommandAsync(long updateId, string commandJson, CancellationToken cancellationToken);
     Task<long?> GetCommittedAppointmentAsync(long updateId, CancellationToken cancellationToken);
+    Task<CreationAttempt?> GetLastCreationAsync(long userId, long beforeUpdateId, CancellationToken cancellationToken);
     Task<StoredConfirmation?> GetConfirmationAsync(long userId, long pendingId, CancellationToken cancellationToken);
     Task<string?> GetPreviousResponseAsync(long userId, long updateId, CancellationToken cancellationToken);
     Task<IReadOnlyList<AgentConversationTurn>> GetHistoryAsync(long userId, long updateId, CancellationToken cancellationToken);
     Task CompletePendingAsync(long userId, CancellationToken cancellationToken);
     Task SaveResponseAsync(long updateId, string response, CancellationToken cancellationToken);
 }
+
+public sealed record CreationAttempt(long UpdateId, long? AgendamentoId);
 
 public static class AgentRequestJson
 {

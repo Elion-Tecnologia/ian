@@ -735,6 +735,7 @@ public sealed partial class TelegramAgentPostgresTests
     }
     private sealed class FaultingTurns(IAgentTurnStore inner, Faults faults) : IAgentTurnStore
     {
+        public Task<CreationAttempt?> GetLastCreationAsync(long userId, long beforeUpdateId, CancellationToken ct) => inner.GetLastCreationAsync(userId, beforeUpdateId, ct);
         public Task<IReadOnlyList<AgentConversationTurn>> GetHistoryAsync(long userId, long updateId, CancellationToken ct) => inner.GetHistoryAsync(userId, updateId, ct);
         public Task<IAsyncDisposable> LockAsync(long userId, CancellationToken ct) => inner.LockAsync(userId, ct);
         public Task<TelegramAgentTurn> GetOrCreateAsync(long updateId, long userId, CancellationToken ct) => inner.GetOrCreateAsync(updateId, userId, ct);
