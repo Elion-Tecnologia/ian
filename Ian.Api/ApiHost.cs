@@ -1,6 +1,7 @@
 using Ian.Infrastructure;
 using Microsoft.AspNetCore.HttpLogging;
 using Ian.Api.Endpoints;
+using Ian.Infrastructure.Persistence;
 
 namespace Ian.Api;
 
@@ -48,6 +49,17 @@ public static class ApiHost
         app.UseHttpsRedirection();
 
         app.MapGet("/app/v1/health", () => Results.Ok(new { status = "Healthy" }));
+        app.MapGet("/app/v1/ready", async (PostgresSchemaReadiness readiness, CancellationToken ct) =>
+        {
+            try
+            {
+                return await readiness.IsReadyAsync(ct)
+                    ? Results.Ok(new { status = "Ready" })
+                    : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception) { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+        });
         app.MapTelegramWebhook();
 
         return app;

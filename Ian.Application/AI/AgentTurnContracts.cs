@@ -12,6 +12,7 @@ public interface IAgendaAgentRunner
 // Trusted host metadata. None of these values is accepted as a function argument from the model.
 public sealed class AgentTurnContext
 {
+    public DialogueGoal? Goal { get; set; }
     public long UpdateId { get; private set; } = -1;
     public AgentToolCaller? Caller { get; private set; }
     public string Text { get; private set; } = "";
@@ -28,6 +29,7 @@ public sealed class AgentTurnContext
     public AgentOperationalContext Operational { get; set; } = AgentOperationalContext.Empty(DateTimeOffset.MinValue);
     public void Start(long updateId, AgentToolCaller caller, string text)
     {
+        Goal = null;
         UpdateId = updateId;
         Caller = caller;
         Text = text;

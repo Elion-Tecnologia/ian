@@ -393,6 +393,7 @@ public sealed partial class TelegramAgentPostgresTests
         await f.EnqueueAsync(1, "Primeira montagem.");
         await f.EnqueueAsync(2, "Outra montagem no mesmo período.");
         await Task.WhenAll(f.ProcessAsync(), f.ProcessAsync());
+        await f.ProcessAsync(); // Later updates are claimed only after the earlier lease completes.
         await using var db = PostgresTestDatabase.CreateContext();
         Assert.Single(await db.Agendamentos.ToListAsync());
         Assert.Single(await db.TelegramBusinessOperations.ToListAsync());
@@ -504,6 +505,9 @@ public sealed partial class TelegramAgentPostgresTests
         private WebApplicationFactory<Program> Factory() => new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
+            // All configuration is synthetic below; do not log the developer's repository path
+            // as the host content root (it can coincide with fixture customer names).
+            builder.UseContentRoot(Path.GetTempPath());
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Telegram:BotToken"] = "synthetic-token", ["Telegram:AdministratorUserId"] = Faults.AdministratorUserId.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -549,6 +553,27 @@ public sealed partial class TelegramAgentPostgresTests
             return new Fixture();
         }
         public void Restart() { _factory.Dispose(); _factory = Factory(); }
+        public async Task<HttpStatusCode> ReadinessAsync()
+        {
+            using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+            using var response = await client.GetAsync("/app/v1/ready");
+            return response.StatusCode;
+        }
+        public async Task WaitForSchemaGuardAsync()
+        {
+            using var worker = new TelegramInboxBackgroundService(
+                _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+                _factory.Services.GetRequiredService<IOptions<TelegramInboxProcessingOptions>>(),
+                _factory.Services.GetRequiredService<ILogger<TelegramInboxBackgroundService>>());
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await worker.StartAsync(timeout.Token);
+            try
+            {
+                while (!Logs.Messages.Any(m => m.Contains("schema PostgreSQL desatualizado")))
+                    await Task.Delay(10, timeout.Token);
+            }
+            finally { await worker.StopAsync(CancellationToken.None); }
+        }
         public Task EnqueueAsync(long id, string text) => EnqueueMessageAsync(id,
             new { from = new { id = 42, is_bot = false }, chat = new { id = 42, type = "private" }, text });
         public async Task EnqueueMessageAsync(long id, object message)
@@ -627,7 +652,13 @@ public sealed partial class TelegramAgentPostgresTests
             if (InterpretationOverride is { } plan)
                 return new(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(plan, AgentRequestJson.Options)));
             var name = _responses.TryPeek(out var next) ? next.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().FirstOrDefault()?.Name : null;
-            var goal = name == "criar_agendamento" ? DialogueGoal.CriarAgendamento : DialogueGoal.Consulta;
+            var goal = name switch
+            {
+                "criar_agendamento" => DialogueGoal.CriarAgendamento,
+                "alterar_agendamento" => DialogueGoal.AlterarAgendamento,
+                "cadastrar_cliente" => DialogueGoal.Continuar,
+                _ => DialogueGoal.Consulta
+            };
             return new(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(new AgentDialoguePlan(goal, DialogueReply.Resultado), AgentRequestJson.Options)));
         }
         public void Tool(string name, object arguments, bool final = true, string? texto = null)

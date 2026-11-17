@@ -96,6 +96,7 @@ public static class DependencyInjection
             options.EnableSensitiveDataLogging(false);
         });
 
+        services.AddScoped<PostgresSchemaReadiness>();
         services.AddScoped<ITelegramUpdateInboxWriter,TelegramUpdateInboxWriter>();
         services.AddScoped<IPendingConversationRepository, PostgresPendingConversationRepository>();
         services.AddScoped<IPendingConversation, PendingConversationService>();

@@ -216,6 +216,8 @@ public sealed partial class TelegramAgentPostgresTests
         await f.EnqueueAsync(2, "Edite com versão 1: Alpha.");
         await f.EnqueueAsync(3, "Edite com versão 1: Beta.");
         await Task.WhenAll(f.ProcessAsync(), f.ProcessAsync());
+        // The inbox now defers a later message while the first holds its lease.
+        await f.ProcessAsync();
         Assert.Single(f.Transport.Replies.Skip(1), r => r.Contains("atualizado"));
         Assert.Single(f.Transport.Replies.Skip(1), r => r.Contains("conflito"));
         await using var db = PostgresTestDatabase.CreateContext();
@@ -307,8 +309,15 @@ public sealed partial class TelegramAgentPostgresTests
             Assert.Equal(confirmationBefore.Id, confirmationAfter.Id);
             Assert.Equal(EstadoSolicitacaoPendente.Pendente, confirmationAfter.Estado);
             Assert.Equal(confirmationBefore.ConfirmacaoJson, confirmationAfter.ConfirmacaoJson);
-            await f.SendAsync(4, "confirmar " + code);
+            await f.EnqueueAsync(4, "confirmar " + code);
+            Assert.False(await f.ProcessAsync()); // Cannot overtake the failed confirmation.
+            await f.MakeRetryReadyAsync(3);
+            Assert.True(await f.ProcessAsync());
             Assert.Contains("cancelado", f.Transport.Replies[^1]);
+            Assert.True(await f.ProcessAsync());
+            Assert.DoesNotContain("Agendamento cancelado", f.Transport.Replies[^1]);
+            Assert.Single(await db.RegistrosAuditoria.ToListAsync());
+            Assert.Equal(2, await db.TelegramBusinessOperations.CountAsync());
         }
     }
 

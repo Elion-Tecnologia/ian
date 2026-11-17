@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ian.Infrastructure.Persistence;
 
 namespace Ian.Infrastructure.Telegram;
 
@@ -23,6 +24,13 @@ public sealed class TelegramInboxBackgroundService(
             {
                 await using var scope =
                     scopeFactory.CreateAsyncScope();
+
+                if (!await scope.ServiceProvider.GetRequiredService<PostgresSchemaReadiness>().IsReadyAsync(stoppingToken))
+                {
+                    logger.LogWarning("Processamento suspenso: schema PostgreSQL desatualizado. Aplique as migrations antes de processar mensagens.");
+                    await Task.Delay(options.Value.ErrorDelay, stoppingToken);
+                    continue;
+                }
 
                 var consumer = scope.ServiceProvider
                     .GetRequiredService<TelegramInboxConsumer>();

@@ -1,6 +1,7 @@
 using Ian.Application.Agenda;
 using Ian.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace Ian.Infrastructure.Persistence;
 
@@ -9,6 +10,19 @@ public sealed class PostgresConsultaAgendaStore(IanDbContext context) : IConsult
     public async Task<IReadOnlyList<AgendamentoAgendaStoreItem>> ConsultarAsync(
         ConsultaAgendaStoreFiltro filtro,
         CancellationToken cancellationToken = default)
+    {
+        // IDs, appointment/version and periods must describe the same committed snapshot.
+        // An agenda mutation already owns its transaction/lock; never nest a transaction there.
+        await using var snapshot = context.Database.CurrentTransaction is null
+            ? await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken)
+            : null;
+        var result = await ConsultarSnapshotAsync(filtro, cancellationToken);
+        if (snapshot is not null) await snapshot.CommitAsync(cancellationToken);
+        return result;
+    }
+
+    private async Task<IReadOnlyList<AgendamentoAgendaStoreItem>> ConsultarSnapshotAsync(
+        ConsultaAgendaStoreFiltro filtro, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(filtro);
 

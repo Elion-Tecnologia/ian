@@ -183,6 +183,7 @@ public sealed partial class TelegramAgentPostgresTests
         Assert.NotNull(original.ClienteId);
         Assert.Equal("13997209208", original.TelefoneCliente);
         f.Restart();
+        f.Model.InterpretationOverride = new(DialogueGoal.Continuar, DialogueReply.Coletar);
         if (tool == "criar_agendamento")
             f.Model.Tool(tool, new { nomeCliente = "Gabriel", clienteId = 999L });
         else f.Model.Tool(tool, new { nome = "Gabriel" });

@@ -422,3 +422,45 @@ A #19 foi integrada em dev. Os testes PostgreSQL foram posteriormente executados
 
 Detalhes técnicos, limites e evidências em
 [docs/spikes/maf-gemini.md](docs/spikes/maf-gemini.md).
+
+## Atualização do schema e estabilização (#117)
+
+O erro `42703: column t.OperationalContextJson does not exist` é reproduzido ao
+executar o modelo atual sobre o schema anterior à migration
+`20261117041013_PersistirReferenciasOperacionais`, já presente em `dev`.
+Não foi necessária nova migration. O upgrade dessa migration preserva turnos e
+respostas existentes, e a criação de banco vazio também é testada. O teste de
+compatibilidade verifica divergências entre modelo EF e snapshot.
+
+O worker aguarda um schema atualizado sem consumir tentativas de mensagens;
+`GET /app/v1/ready` retorna 503 se houver migrations pendentes ou banco
+indisponível. `GET /app/v1/health` continua sendo a verificação de vida do processo.
+Não há aplicação automática de migrations nem alteração de bancos persistentes
+durante os testes. Mensagens anteriormente `FailedPaused` permanecem preservadas
+e precisam de reativação operacional específica depois de corrigida a causa.
+
+Para atualizar uma cópia de trabalho limpa e revisar o SQL, com a API parada:
+
+```powershell
+git switch dev
+git pull --ff-only origin dev
+dotnet restore Ian.slnx
+dotnet tool restore
+dotnet build Ian.slnx --configuration Release --no-restore
+dotnet ef migrations script --idempotent --project Ian.Infrastructure --startup-project Ian.Api --output migration-review.sql
+```
+
+Depois de confirmar o banco de destino e autorizar sua atualização, usando a
+conexão configurada por User Secrets ou `ConnectionStrings__Default`:
+
+```powershell
+dotnet ef database update --project Ian.Infrastructure --startup-project Ian.Api
+dotnet run --project Ian.Api --configuration Release
+```
+
+Não execute esses comandos de Git sobre alterações locais não preservadas.
+Para testes, use exclusivamente o banco descartável e as variáveis descritas em
+[homologação local](docs/homologacao-local.md), com os smokes Gemini desativados.
+A validação simulada cobre o protocolo e os fluxos de negócio, mas não demonstra
+a qualidade semântica do Gemini real. Entregas Telegram incertas continuam sem
+reenvio automático para evitar mensagens duplicadas.
