@@ -525,6 +525,21 @@ preserva a intenção pendente. O limite de 31 dias aplica-se ao intervalo infor
 buscas por cliente/ID formatam as ocupações retornadas mesmo com datas distantes,
 mantendo o limite de registros e de tamanho da resposta Telegram.
 
+A #113 separa a captura/coleta da transição de execução da criação. Após o ciclo
+MAF/Tools, um objetivo tipado de criar/continuar com ato de coleta/resultado faz
+o backend avançar o pedido persistido completo, mesmo sem chamada à Tool de
+criação. Consultas, conversa, explicações, recusas, candidatos, erros e uma
+tentativa de escrita já realizada no turno impedem essa transição. A composição
+da resposta continua sem executar operações. O modo somente perguntar informa
+pendência sem inventar uma exigência de confirmação adicional.
+
+Conflitos preservam a solicitação; uma nova data contextual passa pelo merge e
+pelo mesmo caso de uso transacional, que recalcula todos os períodos e revalida
+ocupações, inclusive dias posteriores ao início. O comando continua congelado
+por update e recuperável pela inbox. Respostas afirmativas só recebem instrução
+de cancelamento se a operação persistida for cancelar; criação usa seu fluxo de
+continuação, e o cancelamento segue exigindo `confirmar <código>` fora do modelo.
+
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
 8 chamadas de Tools, 15 segundos por Tool e 60 segundos por execução. Prompts

@@ -72,7 +72,9 @@ public sealed partial class AgendaTelegramHandler(
                 return AgentToolResult.ConflictResult("Código de confirmação inválido ou obsoleto. Refaça o pedido de cancelamento.");
             return await backend.ConfirmarAsync(new(pending?.Id ?? 0, code, stored.Version, stored.Arguments), ct);
         }
-        if (text.Trim().ToLowerInvariant() is "sim" or "confirmo" or "confirmar")
+        if (text.Trim().ToLowerInvariant() is "sim" or "confirmo" or "confirmar" &&
+            pending?.Intent == PendingIntent.AlterarAgendamento &&
+            pending.CollectedFields.GetValueOrDefault("operacao") == "cancelar")
             return AgentToolResult.Missing("Para cancelar, envie confirmar seguido do código da solicitação. Um sim isolado não aceita outra confirmação.");
         var selection = SelectText().Match(text.Trim());
         if (selection.Success && pending?.CandidateIds.Count > 0)
@@ -125,7 +127,7 @@ public sealed partial class AgendaTelegramHandler(
                 plan = plan with { Objetivo = DialogueGoal.CriarAgendamento, Resposta = DialogueReply.Coletar };
                 logger?.LogInformation("Update {UpdateId} stage=intent_recovered category=NaturalCollection.", context.UpdateId);
             }
-            var trusted = await backend.ComposeDialogueAsync(plan, ct);
+            var trusted = await backend.AvancarCriacaoAsync(plan, ct) ?? await backend.ComposeDialogueAsync(plan, ct);
             var composed = AgentResponseComposer.Compose(trusted, plan.Texto, history.Count > 0);
             var source = ReferenceEquals(composed, trusted) ? "Backend" : "Natural";
             var compositionCategory = source == "Natural" ? "Accepted" : trusted.DialogueMode == AgentDialogueMode.Protected ? "ProtectedOutcome"
