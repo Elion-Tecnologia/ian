@@ -36,6 +36,8 @@ public sealed record AgentToolResult
     public string? RequiredFacts { get; init; }
     public IReadOnlyList<string> ConfirmedAcknowledgements { get; init; } = [];
     public AgentFailureCategory FailureCategory { get; init; }
+    [JsonIgnore]
+    public bool RequiresPlanning { get; init; }
 
     public static AgentToolResult Succeeded(string message, object? data = null) =>
         new(AgentToolOutcome.Success, message, data);
@@ -69,10 +71,10 @@ public sealed record EsclarecerPedidoToolRequest : AgentToolRequest;
 // Trusted text orchestration only. This command is never registered as a model tool.
 public sealed record ConfirmarCancelamentoCommand(Ian.Application.Conversation.ConfirmationAcceptance Acceptance) : AgentToolRequest;
 public sealed record CadastrarClienteToolRequest(string? Nome, string? Telefone, string? EnderecoPrincipal) : AgentToolRequest;
-public sealed record ConsultarAgendaToolRequest(DateOnly? DataInicial, DateOnly? DataFinal, long? ClienteId, long? AgendamentoId, long? TipoServicoId = null, string? Estado = null) : AgentToolRequest;
+public sealed record ConsultarAgendaToolRequest(DateOnly? DataInicial, DateOnly? DataFinal, long? ClienteId, long? AgendamentoId, long? TipoServicoId = null, string? Estado = null, bool? UsarContexto = null) : AgentToolRequest;
 public sealed record VerificarDisponibilidadeToolRequest(DateOnly? Data, TimeOnly? Horario, int? Duracao, string? UnidadeDuracao) : AgentToolRequest;
-public sealed record CriarAgendamentoToolRequest(string? NomeCliente, string? TelefoneCliente, long? TipoServicoId, DateOnly? Data, TimeOnly? Horario, string? Modalidade, int? Duracao, string? UnidadeDuracao, string? EnderecoServico = null, string? Observacoes = null, long? ClienteId = null) : AgentToolRequest;
-public sealed record AlterarAgendamentoToolRequest(long? AgendamentoId, string? Operacao, DateOnly? Data, TimeOnly? Horario, string? Observacoes, long? VersaoEsperada = null, long? TipoServicoId = null, string? Modalidade = null, int? Duracao = null, string? UnidadeDuracao = null, string? EnderecoServico = null, bool? AlterarEndereco = null, bool? AlterarObservacoes = null, long? ClienteId = null, DateOnly? DataBusca = null) : AgentToolRequest;
+public sealed record CriarAgendamentoToolRequest(string? NomeCliente, string? TelefoneCliente, long? TipoServicoId, DateOnly? Data, TimeOnly? Horario, string? Modalidade, int? Duracao, string? UnidadeDuracao, string? EnderecoServico = null, string? Observacoes = null, long? ClienteId = null, bool? UsarContexto = null) : AgentToolRequest;
+public sealed record AlterarAgendamentoToolRequest(long? AgendamentoId, string? Operacao, DateOnly? Data, TimeOnly? Horario, string? Observacoes, long? VersaoEsperada = null, long? TipoServicoId = null, string? Modalidade = null, int? Duracao = null, string? UnidadeDuracao = null, string? EnderecoServico = null, bool? AlterarEndereco = null, bool? AlterarObservacoes = null, long? ClienteId = null, DateOnly? DataBusca = null, bool? UsarContexto = null, int? DeltaDuracao = null, string? CampoPendente = null) : AgentToolRequest;
 
 public interface IAgentToolBackend
 {

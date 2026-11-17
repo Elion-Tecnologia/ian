@@ -25,6 +25,7 @@ public sealed class AgentTurnContext
     public AgentToolResult? MutationResult { get; set; }
     public AgentToolResult? ClarificationResult { get; set; }
     public AgentToolResult? CatalogResult { get; set; }
+    public AgentOperationalContext Operational { get; set; } = AgentOperationalContext.Empty(DateTimeOffset.MinValue);
     public void Start(long updateId, AgentToolCaller caller, string text)
     {
         UpdateId = updateId;
@@ -39,6 +40,7 @@ public sealed class AgentTurnContext
         MutationResult = null;
         ClarificationResult = null;
         CatalogResult = null;
+        Operational = AgentOperationalContext.Empty(DateTimeOffset.MinValue);
     }
 }
 
@@ -54,6 +56,8 @@ public interface IAgentTurnStore
     Task<IReadOnlyList<AgentConversationTurn>> GetHistoryAsync(long userId, long updateId, CancellationToken cancellationToken);
     Task CompletePendingAsync(long userId, CancellationToken cancellationToken);
     Task SaveResponseAsync(long updateId, string response, CancellationToken cancellationToken);
+    Task<AgentOperationalContext> GetOperationalContextAsync(long userId, long beforeUpdateId, DateTimeOffset now, CancellationToken cancellationToken);
+    Task SaveOperationalContextAsync(long updateId, AgentOperationalContext context, CancellationToken cancellationToken);
 }
 
 public sealed record CreationAttempt(long UpdateId, long? AgendamentoId);
