@@ -7,6 +7,7 @@ public sealed class TelegramAgentTurn
     public required long TelegramUserId { get; init; }
     public required string LogicalReplyKey { get; init; }
     public string? CommandJson { get; set; }
+    public string? OperationalContextJson { get; set; }
     public string? ResponseText { get; set; }
     public string SendState { get; set; } = "Pending";
     public int SendAttempts { get; set; }

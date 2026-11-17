@@ -331,6 +331,9 @@ namespace Ian.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("NextSendAttemptAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("OperationalContextJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("ResponseText")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");

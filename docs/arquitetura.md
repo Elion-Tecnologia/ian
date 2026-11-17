@@ -540,6 +540,54 @@ por update e recuperável pela inbox. Respostas afirmativas só recebem instruç
 de cancelamento se a operação persistida for cancelar; criação usa seu fluxo de
 continuação, e o cancelamento segue exigindo `confirmar <código>` fora do modelo.
 
+A #115 acrescenta `AlterarAgendamento` ao objetivo interpretado e `operacao`
+tipada opcional (`Editar`, `Reagendar`, `Concluir`, `Cancelar`). O backend inicia
+somente a coleta nessa etapa; o plano não comprova escrita. A operação permanece
+no request persistido durante buscas e escolhas. Uma seleção de cliente em uma
+alteração retoma o ciclo MAF/Tools para consultar o alvo, sem cancelar ou escolher
+agendamento apenas por ter identificado o cliente.
+
+`AgentOperationalContext` mantém cliente localizado e referências de agendamentos
+com ID, versão, cliente, serviço e estado; guarda até dez candidatos, sem telefone,
+endereço ou transcrição. Consulta com um resultado completo estabelece referência
+única; vários resultados exigem escolha textual por ID. Um ID escolhido pelo
+modelo entre vários candidatos não substitui essa escolha. Referências expiram
+em trinta minutos e são revalidadas no caso de uso antes de qualquer escrita.
+As operações pendentes continuam em `SolicitacaoPendente`; uma consulta intercalada
+atualiza referências recentes sem trocar o alvo/versão já vinculados à pendência.
+
+O snapshot de referências é persistido por update em
+`telegram_agent_turns.OperationalContextJson`, pela migration incremental
+`PersistirReferenciasOperacionais`. Recuperação lê o snapshot do diário, inclusive
+após reinício. Sucesso e referência atualizada de uma mutação vêm da consulta
+pós-commit. Comandos antigos sem novos campos opcionais continuam recuperáveis,
+comparando requests normalizados; reentrega nunca recalcula uma variação relativa.
+
+As Tools reutilizam Application e seus locks/transações:
+
+| Argumento | Uso |
+|---|---|
+| `usarContexto` em criar/consultar | Reutiliza o cliente localizado/selecionado pelo backend. |
+| `usarContexto` em alterar | Resolve o agendamento único/selecionado persistido, sem inventar ID. |
+| `duracao: 3`, `unidadeDuracao: "DiasCorridos"` | Define duração absoluta em três dias. |
+| `deltaDuracao: -2`, `unidadeDuracao: "DiasCorridos"` | Reduz dois dias; exige a unidade atual e resultado positivo. |
+| `campoPendente: "Endereco"` | Coleta novo endereço, sem interpretar ausência de valor como limpeza. |
+
+Não enviar duração absoluta e relativa juntas. A aplicação converte delta em
+duração absoluta com versão esperada e congela esse comando antes da transação.
+Conflito, estado terminal ou versão obsoleta impedem alterações; campos omitidos
+são preservados. `campoPendente` também admite Duracao, Modalidade, Observacoes,
+Data e Horario; flags de limpeza continuam explícitas. A transição de execução é
+comum às operações completas, com cancelamento sempre separado por desafio.
+
+O prompt recebe projeção tipada da pendência, presença dos campos já coletados e
+referências limitadas, sem reenviar endereço/telefone/observações persistidos.
+Histórico fica em três turnos, com até 300 caracteres de entrada e 700 de resposta
+por turno, mais até 1.000 da última resposta; telefones, endereços reconhecíveis e
+códigos de confirmação são suprimidos desse histórico. A mensagem atual é enviada
+para interpretação. Valem os limites globais de prompt e Tools abaixo; não há RAG
+ou histórico ilimitado. Confirmações permanecem protegidas pelo backend.
+
 `GeminiAgendaAgentRunner` usa o mesmo GeminiChatClientFactory e o MAF, com
 FunctionInvokingChatClient limitado a 6 iterações, invocações sequenciais,
 8 chamadas de Tools, 15 segundos por Tool e 60 segundos por execução. Prompts

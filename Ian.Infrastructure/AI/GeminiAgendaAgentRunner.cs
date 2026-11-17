@@ -130,8 +130,9 @@ public sealed class GeminiAgendaAgentRunner(
         {
           "type": "object",
           "properties": {
-            "objetivo": { "type": "string", "enum": ["CriarAgendamento", "Continuar", "Consulta", "Conversa"] },
+            "objetivo": { "type": "string", "enum": ["CriarAgendamento", "AlterarAgendamento", "Continuar", "Consulta", "Conversa"] },
             "resposta": { "type": "string", "enum": ["Coletar", "ExplicarCatalogo", "ExplicarPedido", "Resultado", "Esclarecer"] },
+            "operacao": { "type": "string", "enum": ["Editar", "Reagendar", "Concluir", "Cancelar"] },
             "texto": { "type": "string" }
           },
           "required": ["objetivo", "resposta"],

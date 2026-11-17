@@ -618,6 +618,7 @@ public sealed partial class TelegramAgentPostgresTests
         public void Dialogue(AgentDialoguePlan plan)
         {
             InterpretationOverride = plan;
+            if (plan.Objetivo == DialogueGoal.Conversa && AgentResponseComposer.IsSafeNaturalText(plan.Texto)) return;
             _responses.Enqueue(new(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(plan, AgentRequestJson.Options)))
                 { FinishReason = ChatFinishReason.Stop });
         }
@@ -741,6 +742,8 @@ public sealed partial class TelegramAgentPostgresTests
     }
     private sealed class FaultingTurns(IAgentTurnStore inner, Faults faults) : IAgentTurnStore
     {
+        public Task<AgentOperationalContext> GetOperationalContextAsync(long userId, long beforeUpdateId, DateTimeOffset now, CancellationToken ct) => inner.GetOperationalContextAsync(userId, beforeUpdateId, now, ct);
+        public Task SaveOperationalContextAsync(long updateId, AgentOperationalContext context, CancellationToken ct) => inner.SaveOperationalContextAsync(updateId, context, ct);
         public Task<CreationAttempt?> GetLastCreationAsync(long userId, long beforeUpdateId, CancellationToken ct) => inner.GetLastCreationAsync(userId, beforeUpdateId, ct);
         public Task<IReadOnlyList<AgentConversationTurn>> GetHistoryAsync(long userId, long updateId, CancellationToken ct) => inner.GetHistoryAsync(userId, updateId, ct);
         public Task<IAsyncDisposable> LockAsync(long userId, CancellationToken ct) => inner.LockAsync(userId, ct);

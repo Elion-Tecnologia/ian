@@ -42,7 +42,8 @@ public sealed class PostgresAgentTurnStore(IanDbContext db, NpgsqlDataSource dat
             .Select(t => t.CommandJson).SingleAsync(cancellationToken);
         // jsonb can reorder keys and whitespace; compare canonical parsed requests.
         return System.Text.Json.Nodes.JsonNode.DeepEquals(
-            System.Text.Json.Nodes.JsonNode.Parse(stored ?? "null"), System.Text.Json.Nodes.JsonNode.Parse(commandJson));
+            System.Text.Json.Nodes.JsonNode.Parse(stored is null ? "null" : AgentRequestJson.Serialize(AgentRequestJson.Deserialize(stored))),
+            System.Text.Json.Nodes.JsonNode.Parse(AgentRequestJson.Serialize(AgentRequestJson.Deserialize(commandJson))));
     }
 
     public Task<long?> GetCommittedAppointmentAsync(long updateId, CancellationToken cancellationToken) =>
@@ -89,6 +90,19 @@ public sealed class PostgresAgentTurnStore(IanDbContext db, NpgsqlDataSource dat
     public Task CompletePendingAsync(long userId, CancellationToken cancellationToken) =>
         db.SolicitacoesPendentes.Where(p => p.TelegramUserId == userId && p.Estado == EstadoSolicitacaoPendente.Pendente)
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.Estado, EstadoSolicitacaoPendente.Confirmada), cancellationToken);
+
+    public async Task<AgentOperationalContext> GetOperationalContextAsync(long userId, long beforeUpdateId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var json = await db.Set<TelegramAgentTurn>().AsNoTracking()
+            .Where(t => t.TelegramUserId == userId && t.UpdateId < beforeUpdateId && t.OperationalContextJson != null)
+            .OrderByDescending(t => t.UpdateId).Select(t => t.OperationalContextJson).FirstOrDefaultAsync(cancellationToken);
+        var state = json is null ? null : JsonSerializer.Deserialize<AgentOperationalContext>(json, AgentRequestJson.Options);
+        return state is not null && state.ExpiresAtUtc > now ? state : AgentOperationalContext.Empty(now);
+    }
+
+    public Task SaveOperationalContextAsync(long updateId, AgentOperationalContext context, CancellationToken cancellationToken) =>
+        db.Set<TelegramAgentTurn>().Where(t => t.UpdateId == updateId && t.ResponseText == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.OperationalContextJson, JsonSerializer.Serialize(context, AgentRequestJson.Options)), cancellationToken);
 
     public Task SaveResponseAsync(long updateId, string response, CancellationToken cancellationToken) =>
         db.Set<TelegramAgentTurn>().Where(t => t.UpdateId == updateId && t.ResponseText == null)

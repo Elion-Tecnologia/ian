@@ -31,6 +31,7 @@ public sealed class GeminiDialogueContractTests
     [Theory]
     [InlineData("{\"objetivo\":\"Conversa\",\"resposta\":\"Esclarecer\",\"texto\":\"Oi\"}", AgentDialoguePlanParseFailure.None)]
     [InlineData("{\"objetivo\":\"Consulta\",\"resposta\":\"Resultado\"}", AgentDialoguePlanParseFailure.None)]
+    [InlineData("{\"objetivo\":\"AlterarAgendamento\",\"resposta\":\"Coletar\"}", AgentDialoguePlanParseFailure.None)]
     [InlineData("{\"objetivo\":\"Conversa\",\"texto\":\"Oi\"}", AgentDialoguePlanParseFailure.MissingProperties)]
     [InlineData("{\"objetivo\":\"Conversa\"}", AgentDialoguePlanParseFailure.MissingProperties)]
     [InlineData("{broken", AgentDialoguePlanParseFailure.InvalidJson)]
@@ -59,7 +60,7 @@ public sealed class GeminiDialogueContractTests
             var schema = config.GetProperty("responseJsonSchema");
             Assert.Equal("object", schema.GetProperty("type").GetString());
             Assert.Equal(new[] { "objetivo", "resposta" }, schema.GetProperty("required").EnumerateArray().Select(value => value.GetString()).ToArray());
-            Assert.Equal(new[] { "CriarAgendamento", "Continuar", "Consulta", "Conversa" },
+            Assert.Equal(new[] { "CriarAgendamento", "AlterarAgendamento", "Continuar", "Consulta", "Conversa" },
                 schema.GetProperty("properties").GetProperty("objetivo").GetProperty("enum").EnumerateArray().Select(value => value.GetString()).ToArray());
             Assert.Equal(new[] { "Coletar", "ExplicarCatalogo", "ExplicarPedido", "Resultado", "Esclarecer" },
                 schema.GetProperty("properties").GetProperty("resposta").GetProperty("enum").EnumerateArray().Select(value => value.GetString()).ToArray());

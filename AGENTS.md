@@ -117,3 +117,11 @@ até três despachos, backoff e retry_after persistidos; Sending vencido vira
 Uncertain, nunca reenvio automático. Completed da inbox não comprova entrega.
 PersistirRetentativasRespostas foi validada somente em ian_t51_tests descartável;
 aplicação em banco existente continua exigindo autorização específica.
+
+A #115 consolida referências operacionais tipadas no diário, com expiração,
+seleção explícita e alvo/versão preservados nas pendências. AlterarAgendamento e
+operacao são interpretados antes das Tools; o backend controla a execução.
+deltaDuracao é convertido em duração absoluta com versão esperada antes de
+congelar o comando; nunca reaplicar delta na recuperação. O modelo não fornece
+aceite de cancelamento. PersistirReferenciasOperacionais foi validada somente em
+ian_t115_tests descartável; aplicar em banco existente exige autorização específica.
