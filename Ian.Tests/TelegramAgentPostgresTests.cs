@@ -615,6 +615,12 @@ public sealed partial class TelegramAgentPostgresTests
         public List<string> ToolModes { get; } = [];
         public List<JsonElement> FunctionResults { get; } = [];
         public AgentDialoguePlan? InterpretationOverride { get; set; }
+        public void Dialogue(AgentDialoguePlan plan)
+        {
+            InterpretationOverride = plan;
+            _responses.Enqueue(new(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(plan, AgentRequestJson.Options)))
+                { FinishReason = ChatFinishReason.Stop });
+        }
         private ChatResponse Interpretation()
         {
             if (InterpretationOverride is { } plan)

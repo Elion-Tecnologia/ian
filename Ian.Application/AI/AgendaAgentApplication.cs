@@ -176,6 +176,28 @@ public sealed class AgendaAgentApplication(
 
     private long UserId => turn.Caller?.UserId ?? throw new InvalidOperationException("Turno não autorizado.");
 
+    public async Task<AgentToolResult?> AvancarCriacaoAsync(AgentDialoguePlan plan, CancellationToken ct)
+    {
+        // Collection and tool selection can finish without invoking criar_agendamento. A complete
+        // pending creation still needs an execution transition, independent of the model's wording.
+        // Read-only/social/unclear turns never trigger it; sensitive operations keep their own flow.
+        if (plan.Objetivo is not (DialogueGoal.CriarAgendamento or DialogueGoal.Continuar) ||
+            plan.Resposta is not (DialogueReply.Coletar or DialogueReply.Resultado) ||
+            PendingTurnDataCapture.IsNonCollectionInput(turn.Text) || PendingTurnDataCapture.IsCatalogRequest(turn.Text) ||
+            turn.WriteAttempted || turn.MutationResult is not null || turn.ClarificationResult is not null || turn.SelectionRequired ||
+            turn.LastResult?.Outcome is AgentToolOutcome.Error or AgentToolOutcome.Conflict or AgentToolOutcome.Ambiguous or AgentToolOutcome.ConfirmationRequired)
+            return null;
+        var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
+        if (pending is not { Intent: PendingIntent.CriarAgendamento, MissingFields.Count: 0, CandidateIds.Count: 0 } ||
+            pending.CollectedFields.GetValueOrDefault("request") is not { } json ||
+            AgentRequestJson.Deserialize(json) is not CriarAgendamentoToolRequest request)
+            return null;
+        turn.ReportProgress?.Invoke(new("creation_transition", "ReadyToExecute"));
+        // Reuse authorization, conservative merge, commit recovery and the transactional use case.
+        // Availability is recalculated for the current request, never reused from a prior conflict.
+        return await ExecuteAsync(request, ct);
+    }
+
     private async Task<AgentToolResult> PrepararAsync(AgentToolRequest request, CancellationToken ct, bool somentePerguntar = false)
     {
         var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
@@ -341,7 +363,7 @@ public sealed class AgendaAgentApplication(
         if (horarioDivergente) missing.Add("horário de início");
         await SavePendingAsync(r, missing, null, ct);
         if (missing.Count == 0) return somentePerguntar
-            ? AgentToolResult.Missing("Os dados do pedido estão completos. Informe se deseja prosseguir com o agendamento.")
+            ? AgentToolResult.Missing("Os dados do pedido estão completos, mas o agendamento ainda não foi criado.")
             : await PersistirAsync(effective, ct);
         var campos = missing.Where(c => c != "horário de início").ToArray();
         var mensagem = campos.Length == 0 ? "" : CollectionQuestion(campos[0]);
