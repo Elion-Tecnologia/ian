@@ -683,6 +683,26 @@ Procedimento e limites em [plano de migração](planejamento/migracao-agenda-uni
 
 ### 7.3 Concorrência e transações
 
+Consultas compostas de agenda usam uma transação curta REPEATABLE READ para
+ler IDs, versões e períodos no mesmo snapshot; reutilizam uma transação existente
+quando chamadas dentro de uma operação. Isso impede resultados misturados durante
+reagendamento concorrente. Não mantêm transações durante chamadas ao modelo.
+
+A inbox processa o menor UpdateId elegível e não ultrapassa updates anteriores
+Received, Processing ou FailedRetryable. FailedPaused exige intervenção e não
+bloqueia indefinidamente a fila. A ordenação vale para updates já persistidos;
+não é possível antecipar uma entrega anterior ainda não recebida pelo webhook.
+
+Antes de consumir a inbox/outbox, o worker verifica migrations pendentes e
+divergência modelo/snapshot. Schema desatualizado suspende consumo sem gastar
+tentativas; nenhuma migration é aplicada automaticamente. `/app/v1/health` mede
+vida do processo; `/app/v1/ready` retorna 503 para schema pendente ou banco
+indisponível. A verificação não substitui inspeção de alterações SQL manuais.
+
+O objetivo interpretado do turno é preservado no backend: Consulta/Conversa não
+autoriza Tools de escrita. Consultas de disponibilidade ou cliente respondem com
+seu resultado real sem substituir a coleta pendente por dados da consulta.
+
 TelegramBusinessOperationExecutor possui a transação READ COMMITTED e a barreira
 (UpdateId, OperationKey); rejeita transações aninhadas e mudanças pendentes.
 AgendaMutationExecutor compõe esse executor e adquire PostgresAgendaLock antes

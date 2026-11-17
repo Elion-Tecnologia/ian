@@ -2,12 +2,59 @@ using Ian.Application.Agenda;
 using Ian.Domain.Entities;
 using Ian.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Data.Common;
 
 namespace Ian.Tests;
 
 [Collection("Telegram Inbox PostgreSQL")]
 public sealed class ConsultaAgendaPostgresTests
 {
+    [PostgresFact]
+    public async Task ConsultaMantemVersaoEPeriodosDoMesmoSnapshotDuranteReagendamento()
+    {
+        await InitializeAsync();
+        var cliente = await SeedClienteAsync("Ana", "11999999999", null);
+        var id = await SeedAgendamentoAsync(cliente, TiposServicoPredefinidos.VisitaTecnicaId,
+            EstadoAgendamento.Agendado, ModalidadeServico.Interno, 60, UnidadeDuracao.Minutos,
+            [Periodo(2030, 1, 7, 11, 12)]);
+        var interceptor = new AfterFirstQuery(async () =>
+        {
+            await using var writer = PostgresTestDatabase.CreateContext();
+            await using var tx = await writer.Database.BeginTransactionAsync();
+            var appointment = await writer.Agendamentos.SingleAsync(a => a.Id == id);
+            appointment.InicioPrevistoUtc = appointment.InicioPrevistoUtc.AddDays(1);
+            appointment.FimPrevistoUtc = appointment.FimPrevistoUtc.AddDays(1);
+            appointment.IncrementarVersao();
+            var period = await writer.PeriodosOcupacao.SingleAsync(p => p.AgendamentoId == id);
+            period.InicioUtc = period.InicioUtc.AddDays(1);
+            period.FimUtc = period.FimUtc.AddDays(1);
+            await writer.SaveChangesAsync();
+            await tx.CommitAsync();
+        });
+        await using var db = new IanDbContext(new DbContextOptionsBuilder<IanDbContext>()
+            .UseNpgsql(PostgresTestDatabase.ConnectionString).AddInterceptors(interceptor).Options);
+        var application = new ConsultaAgendaApplication(new PostgresConsultaAgendaStore(db));
+        var result = await application.ConsultarAsync(new(DataInicial: new DateOnly(2030, 1, 7)));
+        var original = Assert.Single(result.Agendamentos);
+        Assert.Equal(1, original.Versao);
+        Assert.Equal(new DateOnly(2030, 1, 7), Assert.Single(original.Periodos).Data);
+        var refreshed = await application.ConsultarAsync(new(AgendamentoId: id));
+        Assert.Equal(2, Assert.Single(refreshed.Agendamentos).Versao);
+        Assert.Equal(new DateOnly(2030, 1, 8), Assert.Single(refreshed.Agendamentos[0].Periodos).Data);
+    }
+
+    private sealed class AfterFirstQuery(Func<Task> action) : DbCommandInterceptor
+    {
+        private bool fired;
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command,
+            CommandExecutedEventData eventData, DbDataReader result, CancellationToken cancellationToken = default)
+        {
+            if (!fired) { fired = true; await action(); }
+            return result;
+        }
+    }
+
     [PostgresFact]
     public async Task AgendaVaziaRetornaNenhumSemRastreamentoOuEscrita()
     {

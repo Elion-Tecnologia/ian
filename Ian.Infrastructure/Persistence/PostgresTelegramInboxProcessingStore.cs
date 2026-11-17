@@ -20,8 +20,8 @@ public sealed class PostgresTelegramInboxProcessingStore(
         const string sql = """
             WITH candidate AS (
                 SELECT "UpdateId"
-                FROM telegram_updates_inbox
-                WHERE
+                FROM telegram_updates_inbox AS queued
+                WHERE (
                     "Estado" = 'Received'
                     OR (
                         "Estado" = 'FailedRetryable'
@@ -31,7 +31,12 @@ public sealed class PostgresTelegramInboxProcessingStore(
                         "Estado" = 'Processing'
                         AND "LockAteUtc" <= now()
                     )
-                ORDER BY "RecebidoEmUtc", "UpdateId"
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM telegram_updates_inbox AS earlier
+                    WHERE earlier."UpdateId" < queued."UpdateId"
+                      AND earlier."Estado" IN ('Received', 'Processing', 'FailedRetryable')
+                )
+                ORDER BY "UpdateId"
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             )

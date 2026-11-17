@@ -30,6 +30,7 @@ public sealed partial class AgendaAgentApplication(
         cancellationToken.ThrowIfCancellationRequested();
         if (request is InterpretarTurnoRequest interpretation)
         {
+            turn.Goal = interpretation.Plan.Objetivo;
             var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken);
             if (pending is null && interpretation.Plan.Objetivo == DialogueGoal.CriarAgendamento)
             {
@@ -54,6 +55,9 @@ public sealed partial class AgendaAgentApplication(
                     pending.MissingFields, null, clock.GetUtcNow(), cancellationToken);
             return AgentToolResult.Succeeded("Objetivo recuperado para este turno.");
         }
+        if (turn.Goal is DialogueGoal.Consulta or DialogueGoal.Conversa &&
+            request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest)
+            return AgentToolResult.Failed("Uma consulta ou conversa não autoriza alterações. Informe a operação desejada.", AgentFailureCategory.InvalidArguments);
         if (turn.SelectionRequired && request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest)
             return AgentToolResult.Ambiguity("Selecione explicitamente um dos IDs apresentados antes de executar outra operação.");
         if (turn.MutationResult is { } completed) return completed;
@@ -61,7 +65,8 @@ public sealed partial class AgendaAgentApplication(
             return clarification;
         if (turn.WriteAttempted && request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest)
             return AgentToolResult.Failed("Já tentei executar este pedido. Consulte a agenda antes de tentar novamente.");
-        if (request is CadastrarClienteToolRequest or LocalizarClienteToolRequest or CriarAgendamentoToolRequest &&
+        if ((request is CadastrarClienteToolRequest or CriarAgendamentoToolRequest ||
+            request is LocalizarClienteToolRequest && turn.Goal != DialogueGoal.Consulta) &&
             PendingTurnDataCapture.IsNonCollectionInput(turn.Text) &&
             await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken) is { Intent: PendingIntent.CriarAgendamento } active &&
             active.CollectedFields.GetValueOrDefault("request") is { } collected)
@@ -70,6 +75,7 @@ public sealed partial class AgendaAgentApplication(
             return turn.PendingResult = await PrepararAsync(AgentRequestJson.Deserialize(collected), cancellationToken, somentePerguntar: true);
         }
         if (request is CadastrarClienteToolRequest or LocalizarClienteToolRequest &&
+            turn.Goal != DialogueGoal.Consulta &&
             (await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), cancellationToken))?.Intent == PendingIntent.CriarAgendamento)
         {
             // Customer tools supply data to the existing goal. Creation still owns the single,
@@ -84,9 +90,9 @@ public sealed partial class AgendaAgentApplication(
         {
             EsclarecerPedidoToolRequest => await EsclarecerAsync(cancellationToken),
             ListarServicosToolRequest => await ServicosAsync(cancellationToken),
-            LocalizarClienteToolRequest r => await LocalizarAsync(r, cancellationToken),
+            LocalizarClienteToolRequest r => turn.QueryResult = await LocalizarAsync(r, cancellationToken),
             ConsultarAgendaToolRequest r => turn.QueryResult = await ConsultarAsync(r, cancellationToken),
-            VerificarDisponibilidadeToolRequest r => await DisponibilidadeAsync(r, cancellationToken),
+            VerificarDisponibilidadeToolRequest r => turn.QueryResult = await DisponibilidadeAsync(r, cancellationToken),
             CadastrarClienteToolRequest or CriarAgendamentoToolRequest or AlterarAgendamentoToolRequest => await PrepararAsync(request, cancellationToken),
             _ => AgentToolResult.Failed("Operação não disponível.")
         };
@@ -352,7 +358,8 @@ public sealed partial class AgendaAgentApplication(
 
     private async Task<AgentToolResult> PrepararCriacaoAsync(CriarAgendamentoToolRequest r, CancellationToken ct, bool somentePerguntar = false)
     {
-        if (r.UsarContexto == true && r.ClienteId is null)
+        if (r.UsarContexto == true && r.ClienteId is null &&
+            string.IsNullOrWhiteSpace(r.NomeCliente) && string.IsNullOrWhiteSpace(r.TelefoneCliente))
         {
             if (turn.Operational.ClienteId is not { } referencedClient)
                 return AgentToolResult.Missing("Localize ou selecione o cliente antes de usar essa referência.");
@@ -545,6 +552,8 @@ public sealed partial class AgendaAgentApplication(
             turn.Operational = turn.Operational with { ClienteId = null };
             turn.SelectionRequired = true;
             var pending = await conversations.GetForTurnAsync(UserId, clock.GetUtcNow(), ct);
+            if (turn.Goal == DialogueGoal.Consulta && pending is not null && pending.Intent != PendingIntent.LocalizarCliente)
+                return AgentToolResult.Ambiguity("Há vários clientes para essa consulta. Refine pelo nome completo ou telefone; seu pedido pendente foi preservado.", result.Clientes);
             if (pending is null)
                 await conversations.StartAsync(UserId, PendingIntent.LocalizarCliente,
                     new Dictionary<string, string> { ["request"] = AgentRequestJson.Serialize(r) }, ["clienteId"], false, clock.GetUtcNow(), ct);

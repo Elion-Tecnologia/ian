@@ -7,6 +7,11 @@ O relógio e as falhas são controlados pelos testes. O modelo nunca acessa SQL.
 
 ## 1. Banco e testes automatizados
 
+A #117 executa a suíte completa também na etapa PostgreSQL do CI, incluindo
+migrations, inbox, catálogo e clientes antes omitidos pelo filtro. As regressões
+adicionadas cobrem ordenação/retry da inbox, consultas intercaladas sem escrita,
+snapshot de leitura concorrente, readiness e upgrade do contexto operacional.
+
 Pré-requisitos: .NET SDK 10, Docker com PostgreSQL 17 e dependências restauradas.
 Na raiz do repositório, com a API parada:
 

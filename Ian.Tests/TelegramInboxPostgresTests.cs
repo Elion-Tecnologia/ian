@@ -12,6 +12,36 @@ public sealed class TelegramInboxPostgresTests
 {
     private const long TestUpdateId = 9_100_140_001;
 
+    [PostgresFact]
+    public async Task LaterUpdateWaitsForEarlierLeaseAndRetryEvenWhenReceivedFirst()
+    {
+        await using var db = await CreateDatabaseAsync();
+        await ResetInboxAsync(db);
+        await SeedAsync(db);
+        db.TelegramUpdatesInbox.Add(new TelegramUpdateInbox
+        {
+            UpdateId = TestUpdateId + 1,
+            PayloadJson = "{\"update_id\":9100140002}",
+            Estado = EstadoTelegramUpdate.Received,
+            RecebidoEmUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
+        });
+        await db.SaveChangesAsync();
+        await using var source = NpgsqlDataSource.Create(ConnectionString);
+        var first = new PostgresTelegramInboxProcessingStore(source);
+        var second = new PostgresTelegramInboxProcessingStore(source);
+        var claims = await Task.WhenAll(first.TryClaimAsync(TimeSpan.FromMinutes(2), default),
+            second.TryClaimAsync(TimeSpan.FromMinutes(2), default));
+        var claim = Assert.Single(claims, c => c is not null)!;
+        Assert.Equal(TestUpdateId, claim.Update.UpdateId);
+        Assert.True(await first.FailAsync(TestUpdateId, claim.LeaseToken, TimeSpan.FromMinutes(1), "ProcessingFailed", default));
+        Assert.Null(await second.TryClaimAsync(TimeSpan.FromMinutes(2), default));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE telegram_updates_inbox SET \"ProximaTentativaEmUtc\" = now() - interval '1 second' WHERE \"UpdateId\" = {TestUpdateId}");
+        var retry = Assert.IsType<TelegramClaimedUpdate>(await second.TryClaimAsync(TimeSpan.FromMinutes(2), default));
+        Assert.Equal(TestUpdateId, retry.Update.UpdateId);
+        Assert.True(await second.CompleteAsync(TestUpdateId, retry.LeaseToken, "Authorized", default));
+        Assert.Equal(TestUpdateId + 1, (await first.TryClaimAsync(TimeSpan.FromMinutes(2), default))?.Update.UpdateId);
+    }
+
     private static string ConnectionString => PostgresTestDatabase.ConnectionString;
 
     [PostgresFact]

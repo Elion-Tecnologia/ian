@@ -85,6 +85,7 @@ public sealed partial class TelegramAgentPostgresTests
         f.Model.Tool("criar_agendamento", new { tipoServicoId = 2L, data = "2030-01-07", enderecoServico = "Rua A" });
         await f.SendAsync(1, "Quero agendar montagem em 07/01/2030 na Rua A.");
         f.Restart();
+        f.Model.InterpretationOverride = new(Ian.Application.AI.DialogueGoal.CriarAgendamento, Ian.Application.AI.DialogueReply.Coletar);
         f.Model.Tool(tool, new { nome = "Ana", telefone = "11999999999" }, final: false);
         f.Model.Tool("listar_servicos", new { }); // The intermediate lookup cannot replace the final saved result.
         await f.SendAsync(2, "É para Ana, telefone 11999999999.");
@@ -111,6 +112,7 @@ public sealed partial class TelegramAgentPostgresTests
         }
         f.Model.Tool("criar_agendamento", new { tipoServicoId = 2L, data = "2030-01-07", enderecoServico = "Rua A" });
         await f.SendAsync(1, "Quero montagem em 07/01/2030 na Rua A.");
+        f.Model.InterpretationOverride = new(Ian.Application.AI.DialogueGoal.CriarAgendamento, Ian.Application.AI.DialogueReply.Coletar);
         f.Model.Tool("localizar_cliente", new { nome = "Ana" });
         await f.SendAsync(2, "É para Ana.");
         Assert.Contains("Selecione", f.Transport.Replies[^1]);
@@ -173,6 +175,7 @@ public sealed partial class TelegramAgentPostgresTests
         }
         else
         {
+            f.Model.InterpretationOverride = new(Ian.Application.AI.DialogueGoal.Continuar, Ian.Application.AI.DialogueReply.Resultado);
             f.Model.Tool("localizar_cliente", new { telefone = "11999999999" });
             await f.SendAsync(3, "Tente novamente com o mesmo telefone.");
             Assert.Contains("Agendamento criado", f.Transport.Replies[^1]);
